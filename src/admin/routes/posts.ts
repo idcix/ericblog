@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { blogCategories, blogPosts, blogPostTags, blogTags } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import {
+	buildUrlSlug,
 	escapeHtml,
 	parseOptionalPositiveInt,
 	parseTagIds,
@@ -23,6 +24,7 @@ import { postEditorPage } from "../views/posts/editor";
 import { postsListPage } from "../views/posts/list";
 
 const posts = new Hono<AdminAppEnv>();
+type BlogDb = ReturnType<typeof getDb>;
 
 interface ParsedPostInput {
 	title: string;
@@ -37,8 +39,9 @@ interface ParsedPostInput {
 	metaKeywords: string | null;
 	canonicalUrl: string | null;
 	categoryId: number | null;
-	authorName: string;
+	newCategoryName: string | null;
 	tagIds: number[];
+	newTagNames: string[];
 }
 
 type ParsedPostInputResult = { data: ParsedPostInput } | { error: string };
@@ -57,10 +60,15 @@ function parsePostInput(body: Record<string, unknown>): ParsedPostInputResult {
 		return { error: "标题不能为空喵" } as const;
 	}
 
-	const slug = sanitizeSlug(body.slug);
-	if (!slug) {
+	const rawSlugInput = sanitizePlainText(body.slug, 120).toLowerCase();
+	const manualSlug = rawSlugInput ? sanitizeSlug(rawSlugInput) : null;
+	if (rawSlugInput && !manualSlug) {
 		return { error: "网址别名格式不合法喵" } as const;
 	}
+
+	const slug =
+		manualSlug ||
+		buildUrlSlug(title, { fallbackPrefix: "post", maxLength: 120 });
 
 	const content = sanitizePlainText(body.content, 100_000, {
 		allowNewlines: true,
@@ -99,6 +107,10 @@ function parsePostInput(body: Record<string, unknown>): ParsedPostInputResult {
 		return { error: "封面图片键名不合法喵" } as const;
 	}
 
+	const newTagNamesRaw = sanitizePlainText(body.newTagNames, 400, {
+		allowNewlines: true,
+	});
+
 	return {
 		data: {
 			title,
@@ -114,10 +126,177 @@ function parsePostInput(body: Record<string, unknown>): ParsedPostInputResult {
 			metaKeywords: sanitizePlainText(body.metaKeywords, 200) || null,
 			canonicalUrl,
 			categoryId,
-			authorName: sanitizePlainText(body.authorName, 80) || "管理员",
+			newCategoryName: sanitizePlainText(body.newCategoryName, 60) || null,
 			tagIds: parseTagIds(body.tagIds),
+			newTagNames: [
+				...new Set(
+					newTagNamesRaw
+						.split(/[\n,，]/)
+						.map((value) => sanitizePlainText(value, 60))
+						.filter(Boolean),
+				),
+			],
 		} satisfies ParsedPostInput,
 	} as const;
+}
+
+function buildSlugCandidate(
+	baseSlug: string,
+	index: number,
+	maxLength: number,
+): string {
+	const suffix = index === 0 ? "" : `-${index + 1}`;
+	const trimmedBase = baseSlug
+		.slice(0, Math.max(1, maxLength - suffix.length))
+		.replaceAll(/-+$/g, "");
+	return `${trimmedBase}${suffix}`;
+}
+
+async function resolveUniquePostSlug(
+	db: BlogDb,
+	baseSlug: string,
+	excludePostId?: number,
+): Promise<string> {
+	for (let index = 0; index < 120; index += 1) {
+		const candidate = buildSlugCandidate(baseSlug, index, 120);
+		const [existing] = await db
+			.select({ id: blogPosts.id })
+			.from(blogPosts)
+			.where(eq(blogPosts.slug, candidate))
+			.limit(1);
+
+		if (!existing || existing.id === excludePostId) {
+			return candidate;
+		}
+	}
+
+	return buildSlugCandidate(
+		`${baseSlug}-${crypto.randomUUID().slice(0, 8)}`,
+		0,
+		120,
+	);
+}
+
+async function createOrGetCategoryId(
+	db: BlogDb,
+	categoryName: string,
+): Promise<number | null> {
+	const [existingByName] = await db
+		.select({ id: blogCategories.id })
+		.from(blogCategories)
+		.where(eq(blogCategories.name, categoryName))
+		.limit(1);
+
+	if (existingByName) {
+		return existingByName.id;
+	}
+
+	const baseSlug = buildUrlSlug(categoryName, {
+		fallbackPrefix: "category",
+		maxLength: 80,
+	});
+
+	for (let index = 0; index < 120; index += 1) {
+		const candidate = buildSlugCandidate(baseSlug, index, 80);
+		const [existingBySlug] = await db
+			.select({ id: blogCategories.id })
+			.from(blogCategories)
+			.where(eq(blogCategories.slug, candidate))
+			.limit(1);
+
+		if (existingBySlug) {
+			continue;
+		}
+
+		const now = new Date().toISOString();
+		const [inserted] = await db
+			.insert(blogCategories)
+			.values({
+				name: categoryName,
+				slug: candidate,
+				createdAt: now,
+				updatedAt: now,
+			})
+			.returning({ id: blogCategories.id });
+
+		return inserted?.id ?? null;
+	}
+
+	return null;
+}
+
+async function createOrGetTagId(
+	db: BlogDb,
+	tagName: string,
+): Promise<number | null> {
+	const [existingByName] = await db
+		.select({ id: blogTags.id })
+		.from(blogTags)
+		.where(eq(blogTags.name, tagName))
+		.limit(1);
+
+	if (existingByName) {
+		return existingByName.id;
+	}
+
+	const baseSlug = buildUrlSlug(tagName, {
+		fallbackPrefix: "tag",
+		maxLength: 80,
+	});
+
+	for (let index = 0; index < 120; index += 1) {
+		const candidate = buildSlugCandidate(baseSlug, index, 80);
+		const [existingBySlug] = await db
+			.select({ id: blogTags.id })
+			.from(blogTags)
+			.where(eq(blogTags.slug, candidate))
+			.limit(1);
+
+		if (existingBySlug) {
+			continue;
+		}
+
+		const [inserted] = await db
+			.insert(blogTags)
+			.values({
+				name: tagName,
+				slug: candidate,
+			})
+			.returning({ id: blogTags.id });
+
+		return inserted?.id ?? null;
+	}
+
+	return null;
+}
+
+async function resolveCategoryId(
+	db: BlogDb,
+	categoryId: number | null,
+	newCategoryName: string | null,
+): Promise<number | null> {
+	if (!newCategoryName) {
+		return categoryId;
+	}
+
+	const createdCategoryId = await createOrGetCategoryId(db, newCategoryName);
+	return createdCategoryId ?? categoryId;
+}
+
+async function resolveTagIds(
+	db: BlogDb,
+	tagIds: number[],
+	newTagNames: string[],
+): Promise<number[]> {
+	const finalTagIds = new Set(tagIds);
+	for (const tagName of newTagNames) {
+		const tagId = await createOrGetTagId(db, tagName);
+		if (tagId) {
+			finalTagIds.add(tagId);
+		}
+	}
+
+	return [...finalTagIds];
 }
 
 posts.use("*", requireAuth);
@@ -154,13 +333,19 @@ posts.get("/new", async (c) => {
 		const categories = await db.select().from(blogCategories);
 		const tags = await db.select().from(blogTags);
 		return c.html(
-			postEditorPage({ categories, tags, csrfToken: session.csrfToken }),
+			postEditorPage({
+				categories,
+				tags,
+				currentUsername: session.username,
+				csrfToken: session.csrfToken,
+			}),
 		);
 	} catch {
 		return c.html(
 			postEditorPage({
 				categories: [],
 				tags: [],
+				currentUsername: session.username,
 				csrfToken: session.csrfToken,
 			}),
 		);
@@ -181,13 +366,24 @@ posts.post("/", async (c) => {
 	}
 
 	const now = new Date().toISOString();
+	const categoryId = await resolveCategoryId(
+		db,
+		parsed.data.categoryId,
+		parsed.data.newCategoryName,
+	);
+	const tagIds = await resolveTagIds(
+		db,
+		parsed.data.tagIds,
+		parsed.data.newTagNames,
+	);
+	const slug = await resolveUniquePostSlug(db, parsed.data.slug);
 	const publishedAt = parsed.data.status === "published" ? now : null;
 
 	const [inserted] = await db
 		.insert(blogPosts)
 		.values({
 			title: parsed.data.title,
-			slug: parsed.data.slug,
+			slug,
 			content: parsed.data.content,
 			excerpt: parsed.data.excerpt,
 			status: parsed.data.status,
@@ -198,16 +394,16 @@ posts.post("/", async (c) => {
 			metaDescription: parsed.data.metaDescription,
 			metaKeywords: parsed.data.metaKeywords,
 			canonicalUrl: parsed.data.canonicalUrl,
-			categoryId: parsed.data.categoryId,
-			authorName: parsed.data.authorName,
+			categoryId,
+			authorName: session.username,
 			createdAt: now,
 			updatedAt: now,
 		})
 		.returning({ id: blogPosts.id });
 
-	if (inserted && parsed.data.tagIds.length > 0) {
+	if (inserted && tagIds.length > 0) {
 		await db.insert(blogPostTags).values(
-			parsed.data.tagIds.map((tagId) => ({
+			tagIds.map((tagId) => ({
 				postId: inserted.id,
 				tagId,
 			})),
@@ -247,6 +443,7 @@ posts.get("/:id/edit", async (c) => {
 			post,
 			categories,
 			tags,
+			currentUsername: session.username,
 			selectedTagIds: postTagRows.map((r) => r.tagId),
 			csrfToken: session.csrfToken,
 		}),
@@ -285,12 +482,23 @@ posts.post("/:id", async (c) => {
 		parsed.data.status === "published" && existing.status !== "published"
 			? now
 			: (existing.publishedAt ?? null);
+	const categoryId = await resolveCategoryId(
+		db,
+		parsed.data.categoryId,
+		parsed.data.newCategoryName,
+	);
+	const tagIds = await resolveTagIds(
+		db,
+		parsed.data.tagIds,
+		parsed.data.newTagNames,
+	);
+	const slug = await resolveUniquePostSlug(db, parsed.data.slug, id);
 
 	await db
 		.update(blogPosts)
 		.set({
 			title: parsed.data.title,
-			slug: parsed.data.slug,
+			slug,
 			content: parsed.data.content,
 			excerpt: parsed.data.excerpt,
 			status: parsed.data.status,
@@ -301,16 +509,16 @@ posts.post("/:id", async (c) => {
 			metaDescription: parsed.data.metaDescription,
 			metaKeywords: parsed.data.metaKeywords,
 			canonicalUrl: parsed.data.canonicalUrl,
-			categoryId: parsed.data.categoryId,
-			authorName: parsed.data.authorName,
+			categoryId,
+			authorName: session.username,
 			updatedAt: now,
 		})
 		.where(eq(blogPosts.id, id));
 
 	await db.delete(blogPostTags).where(eq(blogPostTags.postId, id));
-	if (parsed.data.tagIds.length > 0) {
+	if (tagIds.length > 0) {
 		await db.insert(blogPostTags).values(
-			parsed.data.tagIds.map((tagId) => ({
+			tagIds.map((tagId) => ({
 				postId: id,
 				tagId,
 			})),

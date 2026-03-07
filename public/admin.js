@@ -1,6 +1,29 @@
 const slugInput = document.getElementById("slug");
 const titleInput = document.getElementById("title");
 const tagIdsInput = document.getElementById("tagIds");
+const slugPreview = document.querySelector("[data-slug-preview]");
+
+function buildSlugValue(value) {
+	return value
+		.toLowerCase()
+		.normalize("NFKD")
+		.replaceAll(/[\u0300-\u036f]/g, "")
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-|-$/g, "");
+}
+
+function updateSlugPreview() {
+	if (!(slugPreview instanceof HTMLElement)) {
+		return;
+	}
+
+	if (!(slugInput instanceof HTMLInputElement)) {
+		slugPreview.textContent = "自动生成";
+		return;
+	}
+
+	slugPreview.textContent = slugInput.value.trim() || "自动生成";
+}
 
 function updateSlugFromTitle() {
 	if (!(titleInput instanceof HTMLInputElement)) {
@@ -15,10 +38,8 @@ function updateSlugFromTitle() {
 		return;
 	}
 
-	slugInput.value = titleInput.value
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-|-$/g, "");
+	slugInput.value = buildSlugValue(titleInput.value);
+	updateSlugPreview();
 }
 
 function updateTagIds() {
@@ -42,12 +63,177 @@ titleInput?.addEventListener("input", updateSlugFromTitle);
 
 slugInput?.addEventListener("input", () => {
 	if (slugInput instanceof HTMLInputElement) {
-		slugInput.dataset.manual = "true";
+		slugInput.value = buildSlugValue(slugInput.value);
+		slugInput.dataset.manual = slugInput.value ? "true" : "false";
+		if (!slugInput.value) {
+			slugInput.dataset.manual = "false";
+			updateSlugFromTitle();
+		}
+		updateSlugPreview();
 	}
 });
 
 for (const checkbox of document.querySelectorAll("input[data-tag-checkbox='true']")) {
 	checkbox.addEventListener("change", updateTagIds);
+}
+
+for (const uploader of document.querySelectorAll("[data-cover-uploader='true']")) {
+	if (!(uploader instanceof HTMLElement)) {
+		continue;
+	}
+
+	const uploadUrl = uploader.dataset.uploadUrl || "";
+	const csrfToken = uploader.dataset.csrfToken || "";
+	const hiddenKeyInput = uploader.querySelector("#featuredImageKey");
+	const fileInput = uploader.querySelector("[data-cover-file-input='true']");
+	const dropzone = uploader.querySelector("[data-cover-dropzone='true']");
+	const keyDisplay = uploader.querySelector("[data-cover-key-display]");
+	const status = uploader.querySelector("[data-cover-upload-status]");
+	const selectButton = uploader.querySelector("[data-cover-select='true']");
+	const clearButton = uploader.querySelector("[data-cover-clear='true']");
+
+	const ensurePreviewImage = () => {
+		if (!(dropzone instanceof HTMLElement)) {
+			return null;
+		}
+
+		const existing = dropzone.querySelector("[data-cover-preview-image='true']");
+		if (existing instanceof HTMLImageElement) {
+			return existing;
+		}
+
+		const image = document.createElement("img");
+		image.className = "cover-preview-image";
+		image.setAttribute("data-cover-preview-image", "true");
+		image.alt = "封面预览";
+		dropzone.innerHTML = "";
+		dropzone.appendChild(image);
+		return image;
+	};
+
+	const setEmptyState = () => {
+		if (!(dropzone instanceof HTMLElement)) {
+			return;
+		}
+
+		dropzone.innerHTML =
+			'<div class="cover-empty" data-cover-empty="true">拖拽图片到这里，或点击按钮上传喵</div>';
+	};
+
+	const setStatus = (message) => {
+		if (status instanceof HTMLElement) {
+			status.textContent = message;
+		}
+	};
+
+	const setCoverValue = (key, url) => {
+		if (hiddenKeyInput instanceof HTMLInputElement) {
+			hiddenKeyInput.value = key;
+		}
+
+		if (keyDisplay instanceof HTMLElement) {
+			keyDisplay.textContent = key || "未设置";
+		}
+
+		if (!key) {
+			setEmptyState();
+			return;
+		}
+
+		const image = ensurePreviewImage();
+		if (image instanceof HTMLImageElement) {
+			image.src = url;
+		}
+	};
+
+	const uploadFile = async (file) => {
+		if (!file || !uploadUrl || !csrfToken) {
+			return;
+		}
+
+		const formData = new FormData();
+		formData.append("_csrf", csrfToken);
+		formData.append("file", file);
+		setStatus("正在上传封面，请稍候喵");
+
+		try {
+			const response = await fetch(uploadUrl, {
+				method: "POST",
+				body: formData,
+				credentials: "same-origin",
+			});
+
+			const payload = await response.json().catch(() => ({}));
+			if (!response.ok || !payload?.key) {
+				setStatus(payload?.message || "封面上传失败，请重试喵");
+				return;
+			}
+
+			const imageUrl = payload.url || `/media/${payload.key}`;
+			setCoverValue(payload.key, imageUrl);
+			setStatus("封面上传成功，已自动填入键名喵");
+		} catch {
+			setStatus("封面上传失败，请检查网络后重试喵");
+		}
+	};
+
+	selectButton?.addEventListener("click", () => {
+		if (fileInput instanceof HTMLInputElement) {
+			fileInput.click();
+		}
+	});
+
+	fileInput?.addEventListener("change", () => {
+		if (!(fileInput instanceof HTMLInputElement) || !fileInput.files?.[0]) {
+			return;
+		}
+
+		void uploadFile(fileInput.files[0]);
+		fileInput.value = "";
+	});
+
+	clearButton?.addEventListener("click", () => {
+		setCoverValue("", "");
+		setStatus("封面已清空喵");
+	});
+
+	dropzone?.addEventListener("dragover", (event) => {
+		event.preventDefault();
+		if (dropzone instanceof HTMLElement) {
+			dropzone.classList.add("is-dragover");
+		}
+	});
+
+	dropzone?.addEventListener("click", () => {
+		if (fileInput instanceof HTMLInputElement) {
+			fileInput.click();
+		}
+	});
+
+	dropzone?.addEventListener("dragleave", () => {
+		if (dropzone instanceof HTMLElement) {
+			dropzone.classList.remove("is-dragover");
+		}
+	});
+
+	dropzone?.addEventListener("drop", (event) => {
+		event.preventDefault();
+		if (dropzone instanceof HTMLElement) {
+			dropzone.classList.remove("is-dragover");
+		}
+
+		const file = event.dataTransfer?.files?.[0];
+		if (!file) {
+			return;
+		}
+
+		void uploadFile(file);
+	});
+}
+
+updateSlugPreview();
+if (slugInput instanceof HTMLInputElement && !slugInput.value) {
+	updateSlugFromTitle();
 }
 
 for (const button of document.querySelectorAll("button[data-copy-value]")) {

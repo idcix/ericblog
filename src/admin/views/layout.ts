@@ -614,6 +614,85 @@ export const adminSharedStyles = `
 			font-family: var(--font-mono);
 		}
 
+		.form-help {
+			margin-top: 0.4rem;
+			color: var(--text-muted);
+			font-size: 0.8rem;
+			line-height: 1.6;
+		}
+
+		.form-readonly {
+			padding: 0.72rem 0.95rem;
+			border-radius: var(--radius);
+			border: 1px solid var(--border);
+			background: rgba(255, 255, 255, 0.2);
+			color: var(--text);
+			font-weight: 600;
+		}
+
+		.cover-uploader {
+			display: grid;
+			gap: 0.65rem;
+		}
+
+		.cover-dropzone {
+			position: relative;
+			min-height: 168px;
+			border-radius: var(--radius);
+			border: 1px dashed var(--border);
+			background:
+				radial-gradient(circle at top left, rgba(10, 132, 255, 0.08), transparent 28%),
+				var(--bg-tertiary);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			overflow: hidden;
+			cursor: pointer;
+			transition:
+				border-color var(--transition-fast),
+				background-color var(--transition-fast),
+				transform var(--transition-fast);
+		}
+
+		.cover-dropzone:hover,
+		.cover-dropzone.is-dragover {
+			border-color: rgba(10, 132, 255, 0.42);
+			background-color: rgba(10, 132, 255, 0.08);
+			transform: translate3d(0, -1px, 0);
+		}
+
+		.cover-empty {
+			padding: 0 1rem;
+			text-align: center;
+			color: var(--text-muted);
+			font-size: 0.85rem;
+			line-height: 1.7;
+		}
+
+		.cover-preview-image {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+
+		.cover-actions {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0.6rem;
+		}
+
+		.sr-only {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			padding: 0;
+			margin: -1px;
+			overflow: hidden;
+			clip: rect(0, 0, 0, 0);
+			white-space: nowrap;
+			border: 0;
+		}
+
 		.editor-grid {
 			display: grid;
 			grid-template-columns: minmax(0, 1.8fr) minmax(280px, 1fr);

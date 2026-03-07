@@ -33,6 +33,31 @@ function renderMediaErrorPage(csrfToken: string, message: string) {
 	);
 }
 
+function parseUploadFile(body: Record<string, unknown>): File | null {
+	const file = body.file;
+	return file instanceof File ? file : null;
+}
+
+function validateUploadFile(file: File): string | null {
+	if (!isAllowedImageMimeType(file.type)) {
+		return "仅允许上传 JPG、PNG、WEBP、AVIF 或 GIF 图片喵";
+	}
+
+	if (file.size > MAX_UPLOAD_BYTES) {
+		return "单个文件不能超过 5 MB 喵";
+	}
+
+	return null;
+}
+
+async function saveUploadFile(c: { env: AdminAppEnv["Bindings"] }, file: File) {
+	const key = buildMediaObjectKey(file);
+	await c.env.MEDIA_BUCKET.put(key, await file.arrayBuffer(), {
+		httpMetadata: { contentType: getMediaContentTypeForKey(key) || file.type },
+	});
+	return key;
+}
+
 media.use("*", requireAuth);
 
 media.get("/", async (c) => {
@@ -95,38 +120,54 @@ media.post("/upload", async (c) => {
 	if (!assertCsrfToken(body._csrf, session)) {
 		return c.text("CSRF 校验失败喵", 403);
 	}
-	const file = body.file;
-
-	if (!(file instanceof File)) {
+	const file = parseUploadFile(body);
+	if (!file) {
 		return c.html(
 			renderMediaErrorPage(session.csrfToken, "请选择要上传的文件喵"),
 			400,
 		);
 	}
 
-	if (!isAllowedImageMimeType(file.type)) {
+	const validationError = validateUploadFile(file);
+	if (validationError) {
 		return c.html(
-			renderMediaErrorPage(
-				session.csrfToken,
-				"仅允许上传 JPG、PNG、WEBP、AVIF 或 GIF 图片喵",
-			),
+			renderMediaErrorPage(session.csrfToken, validationError),
 			400,
 		);
 	}
 
-	if (file.size > MAX_UPLOAD_BYTES) {
-		return c.html(
-			renderMediaErrorPage(session.csrfToken, "单个文件不能超过 5 MB 喵"),
-			400,
-		);
-	}
-
-	const key = buildMediaObjectKey(file);
-	await c.env.MEDIA_BUCKET.put(key, await file.arrayBuffer(), {
-		httpMetadata: { contentType: getMediaContentTypeForKey(key) || file.type },
-	});
+	await saveUploadFile(c, file);
 
 	return c.redirect("/api/admin/media");
+});
+
+media.post("/upload-async", async (c) => {
+	const session = getAuthenticatedSession(c);
+	const body = await c.req.parseBody();
+	if (!assertCsrfToken(body._csrf, session)) {
+		return c.json({ message: "CSRF 校验失败喵" }, 403);
+	}
+
+	const file = parseUploadFile(body);
+	if (!file) {
+		return c.json({ message: "请选择要上传的文件喵" }, 400);
+	}
+
+	const validationError = validateUploadFile(file);
+	if (validationError) {
+		return c.json({ message: validationError }, 400);
+	}
+
+	try {
+		const key = await saveUploadFile(c, file);
+		return c.json({
+			key,
+			url: `/media/${key}`,
+			message: "上传成功喵",
+		});
+	} catch {
+		return c.json({ message: "上传失败，请稍后再试喵" }, 500);
+	}
 });
 
 media.get("/file/*", async (c) => {

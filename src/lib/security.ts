@@ -46,6 +46,30 @@ export function sanitizeSlug(value: unknown): string | null {
 	return normalized;
 }
 
+export function buildUrlSlug(
+	value: unknown,
+	options?: { fallbackPrefix?: string; maxLength?: number },
+): string {
+	const fallbackPrefix =
+		sanitizeSlug(options?.fallbackPrefix || "post") || "post";
+	const maxLength = Math.max(8, options?.maxLength ?? 120);
+	const normalized = String(value ?? "")
+		.normalize("NFKD")
+		.replaceAll(/[\u0300-\u036f]/g, "")
+		.toLowerCase()
+		.replaceAll(/[^a-z0-9]+/g, "-")
+		.replaceAll(/^-+|-+$/g, "");
+
+	if (!normalized) {
+		const fallback = `${fallbackPrefix}-${crypto.randomUUID().slice(0, 8)}`;
+		return fallback.slice(0, maxLength);
+	}
+
+	return (
+		normalized.slice(0, maxLength).replaceAll(/-+$/g, "") || fallbackPrefix
+	);
+}
+
 export function sanitizePostStatus(value: unknown): PostStatus | null {
 	const normalized = String(value ?? "").trim();
 	return POST_STATUS_VALUES.includes(normalized as PostStatus)

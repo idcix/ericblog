@@ -6,7 +6,7 @@ import {
 	isLegacyPasswordHash,
 	verifyPassword,
 } from "../../src/lib/password";
-import { renderSafeMarkdown } from "../../src/lib/security";
+import { buildUrlSlug, renderSafeMarkdown } from "../../src/lib/security";
 
 describe("安全工具喵", () => {
 	test("renderSafeMarkdown 会转义原始 HTML 喵", async () => {
@@ -55,5 +55,20 @@ describe("安全工具喵", () => {
 		assert.equal(isLegacyPasswordHash(legacyHash), true);
 		assert.equal(await verifyPassword(password, legacyHash), true);
 		assert.equal(await verifyPassword("wrong-password", legacyHash), false);
+	});
+
+	test("buildUrlSlug 会把标题转成 URL 友好的路径喵", () => {
+		assert.equal(buildUrlSlug("Hello Astro Blog"), "hello-astro-blog");
+		assert.equal(buildUrlSlug("Cloudflare + D1 + R2"), "cloudflare-d1-r2");
+	});
+
+	test("buildUrlSlug 遇到无法转写的字符时会回退到前缀随机路径喵", () => {
+		const slug = buildUrlSlug("中文标题", { fallbackPrefix: "post" });
+		assert.match(slug, /^post-[0-9a-f]{8}$/u);
+	});
+
+	test("buildUrlSlug 支持长度限制喵", () => {
+		const slug = buildUrlSlug("a".repeat(140), { maxLength: 24 });
+		assert.equal(slug.length, 24);
 	});
 });
