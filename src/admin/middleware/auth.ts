@@ -1,7 +1,7 @@
 import type { Context, Next } from "hono";
 import { getCookie } from "hono/cookie";
 import * as jose from "jose";
-import { fingerprintPasswordHash, timingSafeEqualText } from "@/lib/password";
+import { timingSafeEqualText } from "@/lib/password";
 
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
 const SESSION_PREFIX = "admin-session:";
@@ -23,16 +23,20 @@ export interface AdminAppEnv {
 	};
 }
 
-interface SessionTokenPayload extends jose.JWTPayload {
-	pwdv?: string;
-}
-
 function getSessionStorageKey(sessionId: string): string {
 	return `${SESSION_PREFIX}${sessionId}`;
 }
 
 function getJwtSecret(jwtSecret: string): Uint8Array {
 	return new TextEncoder().encode(jwtSecret);
+}
+
+function getAdminGitHubLogin(env: Env): string {
+	return (
+		env.ADMIN_GITHUB_LOGIN?.trim() ||
+		env.ADMIN_USERNAME?.trim() ||
+		""
+	).trim();
 }
 
 export function getSessionCookieOptions(requestUrl?: string) {
@@ -50,14 +54,17 @@ export function getSessionCookieOptions(requestUrl?: string) {
 	};
 }
 
-export async function createSession(env: Env): Promise<AdminSession> {
+export async function createSession(
+	env: Env,
+	username: string,
+): Promise<AdminSession> {
 	const createdAt = new Date().toISOString();
 	const expiresAt = new Date(
 		Date.now() + SESSION_TTL_SECONDS * 1000,
 	).toISOString();
 	const session: AdminSession = {
 		id: crypto.randomUUID(),
-		username: env.ADMIN_USERNAME,
+		username,
 		csrfToken: crypto.randomUUID(),
 		createdAt,
 		expiresAt,
@@ -116,19 +123,14 @@ async function readSession(
 
 export async function createToken(
 	env: Env,
-	sessionId: string,
+	session: Pick<AdminSession, "id" | "username">,
 ): Promise<string> {
-	const passwordFingerprint = await fingerprintPasswordHash(
-		env.ADMIN_PASSWORD_HASH,
-	);
-
 	return await new jose.SignJWT({
 		role: "admin",
-		pwdv: passwordFingerprint,
 	})
 		.setProtectedHeader({ alg: "HS256" })
-		.setSubject(env.ADMIN_USERNAME)
-		.setJti(sessionId)
+		.setSubject(session.username)
+		.setJti(session.id)
 		.setIssuer(SESSION_ISSUER)
 		.setAudience(SESSION_AUDIENCE)
 		.setIssuedAt()
@@ -139,9 +141,9 @@ export async function createToken(
 export async function verifyToken(
 	env: Env,
 	token: string,
-): Promise<{ sessionId: string } | null> {
+): Promise<{ sessionId: string; username: string } | null> {
 	try {
-		const { payload } = await jose.jwtVerify<SessionTokenPayload>(
+		const { payload } = await jose.jwtVerify(
 			token,
 			getJwtSecret(env.JWT_SECRET),
 			{
@@ -153,25 +155,16 @@ export async function verifyToken(
 		if (
 			typeof payload.jti !== "string" ||
 			typeof payload.sub !== "string" ||
-			typeof payload.pwdv !== "string" ||
 			payload.role !== "admin"
 		) {
 			return null;
 		}
 
-		if (!timingSafeEqualText(payload.sub, env.ADMIN_USERNAME)) {
+		if (!timingSafeEqualText(payload.sub, getAdminGitHubLogin(env))) {
 			return null;
 		}
 
-		const expectedPasswordFingerprint = await fingerprintPasswordHash(
-			env.ADMIN_PASSWORD_HASH,
-		);
-
-		if (!timingSafeEqualText(payload.pwdv, expectedPasswordFingerprint)) {
-			return null;
-		}
-
-		return { sessionId: payload.jti };
+		return { sessionId: payload.jti, username: payload.sub };
 	} catch {
 		return null;
 	}
@@ -191,7 +184,12 @@ export async function getSessionFromToken(
 		return null;
 	}
 
-	if (!timingSafeEqualText(session.username, env.ADMIN_USERNAME)) {
+	if (!timingSafeEqualText(session.username, payload.username)) {
+		await destroySession(env, session.id);
+		return null;
+	}
+
+	if (!timingSafeEqualText(session.username, getAdminGitHubLogin(env))) {
 		await destroySession(env, session.id);
 		return null;
 	}

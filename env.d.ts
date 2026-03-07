@@ -14,8 +14,12 @@ interface Env {
 
 	JWT_SECRET: string;
 	ADMIN_USERNAME: string;
+	ADMIN_GITHUB_LOGIN: string;
 	ADMIN_PASSWORD_HASH: string;
 	TURNSTILE_SECRET_KEY: string;
+	GITHUB_OAUTH_CLIENT_ID: string;
+	GITHUB_OAUTH_CLIENT_SECRET: string;
+	GITHUB_OAUTH_REDIRECT_URI: string;
 }
 
 declare namespace App {

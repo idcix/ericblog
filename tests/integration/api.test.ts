@@ -3,7 +3,11 @@ import { describe, test } from "node:test";
 import { app } from "../../src/admin/app";
 
 const mockEnv = {
-	TURNSTILE_SITE_KEY: "",
+	ADMIN_USERNAME: "Eric-Terminal",
+	ADMIN_GITHUB_LOGIN: "Eric-Terminal",
+	GITHUB_OAUTH_CLIENT_ID: "client-id",
+	GITHUB_OAUTH_CLIENT_SECRET: "client-secret",
+	GITHUB_OAUTH_REDIRECT_URI: "",
 	SESSION: {
 		get: async () => null,
 		put: async () => undefined,
@@ -24,14 +28,16 @@ describe("后台接口喵", () => {
 		assert.ok(body.timestamp);
 	});
 
-	test("GET /auth/login 会返回登录页面喵", async () => {
+	test("GET /auth/login 会返回 GitHub OAuth 登录页面喵", async () => {
 		const res = await app.request("/auth/login", undefined, mockEnv);
 		assert.equal(res.status, 200);
 
 		const html = await res.text();
-		assert.match(html, /管理后台登录/u);
-		assert.match(html, /name="username"/u);
-		assert.match(html, /name="password"/u);
+		assert.match(html, /GitHub OAuth 登录/u);
+		assert.match(html, /Eric-Terminal/u);
+		assert.match(html, /\/api\/auth\/github/u);
+		assert.ok(!html.includes('name="username"'));
+		assert.ok(!html.includes('name="password"'));
 	});
 
 	test("未登录访问 /admin 会跳转到登录页喵", async () => {
@@ -68,19 +74,25 @@ describe("后台接口喵", () => {
 		assert.equal(res.headers.get("location"), "/api/auth/login");
 	});
 
-	test("POST /auth/login 缺少凭据时会返回 400 喵", async () => {
+	test("POST /auth/login 会拒绝密码表单登录喵", async () => {
 		const res = await app.request(
 			"/auth/login",
 			{
 				method: "POST",
-				body: new URLSearchParams({}),
-				headers: { "Content-Type": "application/x-www-form-urlencoded" },
 			},
 			mockEnv,
 		);
-		assert.equal(res.status, 400);
+		assert.equal(res.status, 405);
+		assert.match(await res.text(), /仅支持 GitHub OAuth 登录/u);
+	});
 
-		const html = await res.text();
-		assert.match(html, /用户名和密码不能为空/u);
+	test("GET /auth/github 缺少配置时会返回 503 喵", async () => {
+		const res = await app.request("/auth/github", undefined, {
+			...mockEnv,
+			GITHUB_OAUTH_CLIENT_ID: "",
+			GITHUB_OAUTH_CLIENT_SECRET: "",
+		} as unknown as Env);
+		assert.equal(res.status, 503);
+		assert.match(await res.text(), /尚未完成 GitHub OAuth 配置/u);
 	});
 });

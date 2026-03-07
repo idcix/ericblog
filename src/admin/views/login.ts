@@ -1,21 +1,21 @@
-import { escapeAttribute, escapeHtml } from "@/lib/security";
+import { escapeHtml } from "@/lib/security";
 
 interface LoginPageOptions {
 	error?: string;
-	turnstileSiteKey?: string;
+	githubLogin?: string;
+	oauthEnabled?: boolean;
 }
 
 export function loginPage(options: LoginPageOptions = {}): string {
-	const { error, turnstileSiteKey } = options;
+	const { error, githubLogin, oauthEnabled = false } = options;
 
 	return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<title>管理后台登录</title>
+	<title>GitHub OAuth 登录</title>
 	<meta name="robots" content="noindex, nofollow" />
-	${turnstileSiteKey ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>' : ""}
 	<style>
 		*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 		html {
@@ -29,75 +29,94 @@ export function loginPage(options: LoginPageOptions = {}): string {
 			display: flex;
 			align-items: center;
 			justify-content: center;
+			padding: 1.5rem;
 		}
 		.login-card {
 			width: 100%;
-			max-width: 400px;
+			max-width: 420px;
 			padding: 2rem;
 			background: #1e293b;
 			border: 1px solid #334155;
+			border-radius: 0.75rem;
+			display: grid;
+			gap: 1rem;
+		}
+		h1 {
+			font-size: 1.5rem;
+			text-align: center;
+		}
+		.login-hint {
+			color: #cbd5e1;
+			font-size: 0.92rem;
+			line-height: 1.8;
+			text-align: center;
+		}
+		.login-notice {
+			background: rgba(59, 130, 246, 0.12);
+			color: #bfdbfe;
+			padding: 0.85rem 0.95rem;
 			border-radius: 0.5rem;
+			border: 1px solid rgba(59, 130, 246, 0.24);
+			font-size: 0.88rem;
+			line-height: 1.7;
 		}
-		h1 { font-size: 1.5rem; margin-bottom: 1.5rem; text-align: center; }
-		.form-group { margin-bottom: 1rem; }
-		label { display: block; margin-bottom: 0.375rem; color: #cbd5e1; font-size: 0.85rem; }
-		input {
+		.oauth-button {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 0.65rem;
 			width: 100%;
-			padding: 0.625rem 0.75rem;
-			background: #0f172a;
-			border: 1px solid #334155;
-			border-radius: 0.375rem;
-			color: #f1f5f9;
-			font-family: inherit;
-			font-size: 0.9rem;
-		}
-		input:focus { outline: none; border-color: #3b82f6; }
-		button {
-			width: 100%;
-			padding: 0.625rem;
-			background: #3b82f6;
+			padding: 0.85rem 1rem;
+			background: #111827;
+			border: 1px solid rgba(255, 255, 255, 0.12);
+			border-radius: 0.5rem;
 			color: #fff;
-			border: none;
-			border-radius: 0.375rem;
-			font-family: inherit;
-			font-size: 0.9rem;
 			font-weight: 600;
-			cursor: pointer;
-			margin-top: 0.5rem;
+			text-decoration: none;
+			transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
 		}
-		button:hover { background: #60a5fa; }
+		.oauth-button:hover {
+			background: #0b1220;
+			border-color: rgba(96, 165, 250, 0.4);
+			transform: translateY(-1px);
+			color: #fff;
+		}
+		.oauth-button[aria-disabled="true"] {
+			opacity: 0.55;
+			pointer-events: none;
+		}
+		.oauth-mark {
+			font-size: 1rem;
+			line-height: 1;
+		}
 		.error {
-			background: rgba(239,68,68,0.1);
+			background: rgba(239, 68, 68, 0.1);
 			color: #ef4444;
 			padding: 0.625rem;
-			border-radius: 0.375rem;
-			margin-bottom: 1rem;
+			border-radius: 0.5rem;
 			font-size: 0.85rem;
 			text-align: center;
-			border: 1px solid rgba(239,68,68,0.2);
+			border: 1px solid rgba(239, 68, 68, 0.2);
 		}
 	</style>
 </head>
 <body>
 	<div class="login-card">
-		<h1>管理后台登录</h1>
+		<h1>使用 GitHub 登录后台</h1>
+		<p class="login-hint">后台仅允许指定 GitHub 账号通过 OAuth 登录喵</p>
 		${error ? `<div class="error">${escapeHtml(error)}</div>` : ""}
-		<form method="post" action="/api/auth/login">
-			<div class="form-group">
-				<label for="username">用户名</label>
-				<input type="text" id="username" name="username" required autocomplete="username" />
-			</div>
-			<div class="form-group">
-				<label for="password">密码</label>
-				<input type="password" id="password" name="password" required autocomplete="current-password" />
-			</div>
-			${
-				turnstileSiteKey
-					? `<div class="form-group"><div class="cf-turnstile" data-sitekey="${escapeAttribute(turnstileSiteKey)}"></div></div>`
-					: ""
-			}
-			<button type="submit">登录</button>
-		</form>
+		<div class="login-notice">
+			<p>允许访问的 GitHub 账号：${escapeHtml(githubLogin || "未配置")}</p>
+			<p>如果这里还是未配置状态，请先补充 GitHub OAuth 环境变量喵</p>
+		</div>
+		<a
+			href="/api/auth/github"
+			class="oauth-button"
+			aria-disabled="${oauthEnabled ? "false" : "true"}"
+		>
+			<span class="oauth-mark">GitHub</span>
+			<span>使用 GitHub OAuth 登录</span>
+		</a>
 	</div>
 </body>
 </html>`;

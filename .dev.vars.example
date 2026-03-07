@@ -1,7 +1,16 @@
 # 建议使用 `openssl rand -hex 32` 生成随机密钥喵
 JWT_SECRET=请替换为随机密钥
-ADMIN_USERNAME=admin
-# 使用 `npm run hash:password -- 你的密码` 生成后台密码哈希喵
-ADMIN_PASSWORD_HASH=请替换为_PBKDF2_密码哈希
+# 仅允许这个 GitHub 用户名登录后台喵
+ADMIN_GITHUB_LOGIN=你的_GitHub_用户名
+# 兼容旧配置时可保留，与 OAuth 模式相比不会再用于密码登录喵
+ADMIN_USERNAME=你的_GitHub_用户名
+# GitHub OAuth App 的客户端 ID 喵
+GITHUB_OAUTH_CLIENT_ID=请替换为_GitHub_OAuth_Client_ID
+# GitHub OAuth App 的客户端密钥喵
+GITHUB_OAUTH_CLIENT_SECRET=请替换为_GitHub_OAuth_Client_Secret
+# 可选，默认会按当前请求地址推导回调地址喵
+GITHUB_OAUTH_REDIRECT_URI=
+# 已切换为 GitHub OAuth 登录后，本地密码哈希不再参与后台登录喵
+ADMIN_PASSWORD_HASH=
 # 如未启用 Turnstile，可留空喵
 TURNSTILE_SECRET_KEY=

@@ -1,10 +1,6 @@
 import { Hono } from "hono";
-import { deleteCookie, setCookie } from "hono/cookie";
-import {
-	isLegacyPasswordHash,
-	timingSafeEqualText,
-	verifyPassword,
-} from "@/lib/password";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import { timingSafeEqualText } from "@/lib/password";
 import { sanitizePlainText } from "@/lib/security";
 import {
 	type AdminAppEnv,
@@ -16,141 +12,304 @@ import {
 	getSessionCookieOptions,
 	requireAuth,
 } from "../middleware/auth";
-import {
-	clearAttempts,
-	rateLimit,
-	recordFailedAttempt,
-} from "../middleware/rate-limit";
 import { loginPage } from "../views/login";
 
 const auth = new Hono<AdminAppEnv>();
+const OAUTH_STATE_COOKIE = "admin_oauth_state";
+const OAUTH_VERIFIER_COOKIE = "admin_oauth_verifier";
+const OAUTH_COOKIE_TTL_SECONDS = 10 * 60;
 
-function getTurnstileSiteKey(env: Env): string | undefined {
-	const siteKey = env.TURNSTILE_SITE_KEY?.trim();
-	return siteKey ? siteKey : undefined;
+interface GitHubOAuthConfig {
+	clientId: string;
+	clientSecret: string;
+	adminLogin: string;
+	redirectUri?: string;
 }
 
-async function verifyTurnstile(
-	env: Env,
-	responseToken: string,
-	ipAddress: string,
-): Promise<boolean> {
-	const siteKey = getTurnstileSiteKey(env);
-	const secret = env.TURNSTILE_SECRET_KEY?.trim();
+interface GitHubAccessTokenResponse {
+	access_token?: string;
+	error?: string;
+	error_description?: string;
+}
 
-	if (!siteKey && !secret) {
-		return true;
+interface GitHubUserProfile {
+	login?: string;
+	id?: number;
+}
+
+function getAdminGitHubLogin(env: Env): string | undefined {
+	const login = env.ADMIN_GITHUB_LOGIN?.trim() || env.ADMIN_USERNAME?.trim();
+	return login ? login : undefined;
+}
+
+function getGitHubOAuthConfig(env: Env): GitHubOAuthConfig | null {
+	const clientId = env.GITHUB_OAUTH_CLIENT_ID?.trim();
+	const clientSecret = env.GITHUB_OAUTH_CLIENT_SECRET?.trim();
+	const adminLogin = getAdminGitHubLogin(env);
+	const redirectUri = env.GITHUB_OAUTH_REDIRECT_URI?.trim();
+
+	if (!clientId || !clientSecret || !adminLogin) {
+		return null;
 	}
 
-	if (!siteKey || !secret) {
-		return false;
+	return {
+		clientId,
+		clientSecret,
+		adminLogin,
+		redirectUri: redirectUri || undefined,
+	};
+}
+
+function getOAuthCookieOptions(requestUrl: string) {
+	const secure = !["localhost", "127.0.0.1"].includes(
+		new URL(requestUrl).hostname,
+	);
+
+	return {
+		httpOnly: true,
+		secure,
+		sameSite: "Lax" as const,
+		path: "/",
+		maxAge: OAUTH_COOKIE_TTL_SECONDS,
+	};
+}
+
+function encodeBase64Url(bytes: Uint8Array): string {
+	let value = "";
+	for (const byte of bytes) {
+		value += String.fromCharCode(byte);
 	}
 
-	if (!responseToken) {
-		return false;
-	}
+	return btoa(value)
+		.replaceAll("+", "-")
+		.replaceAll("/", "_")
+		.replace(/=+$/u, "");
+}
 
-	const body = new URLSearchParams({
-		secret,
-		response: responseToken,
-		remoteip: ipAddress,
+function createCodeVerifier(): string {
+	const bytes = crypto.getRandomValues(new Uint8Array(32));
+	return encodeBase64Url(bytes);
+}
+
+async function createCodeChallenge(codeVerifier: string): Promise<string> {
+	const digest = await crypto.subtle.digest(
+		"SHA-256",
+		new TextEncoder().encode(codeVerifier),
+	);
+
+	return encodeBase64Url(new Uint8Array(digest));
+}
+
+function getResolvedRedirectUri(
+	config: GitHubOAuthConfig,
+	requestUrl: string,
+): string {
+	return (
+		config.redirectUri ||
+		new URL("/api/auth/github/callback", requestUrl).toString()
+	);
+}
+
+async function exchangeGitHubAccessToken(
+	config: GitHubOAuthConfig,
+	code: string,
+	requestUrl: string,
+	codeVerifier: string,
+) {
+	const response = await fetch("https://github.com/login/oauth/access_token", {
+		method: "POST",
+		headers: {
+			Accept: "application/json",
+			"Content-Type": "application/json",
+			"User-Agent": "cf-astro-blog-starter",
+		},
+		body: JSON.stringify({
+			client_id: config.clientId,
+			client_secret: config.clientSecret,
+			code,
+			redirect_uri: getResolvedRedirectUri(config, requestUrl),
+			code_verifier: codeVerifier,
+		}),
 	});
 
-	try {
-		const response = await fetch(
-			"https://challenges.cloudflare.com/turnstile/v0/siteverify",
-			{
-				method: "POST",
-				body,
-			},
-		);
-
-		if (!response.ok) {
-			return false;
-		}
-
-		const result = (await response.json()) as { success?: boolean };
-		return Boolean(result.success);
-	} catch {
-		return false;
+	if (!response.ok) {
+		return null;
 	}
+
+	const result = (await response.json()) as GitHubAccessTokenResponse;
+
+	if (!result.access_token || result.error) {
+		return null;
+	}
+
+	return result.access_token;
+}
+
+async function fetchGitHubUserProfile(accessToken: string) {
+	const response = await fetch("https://api.github.com/user", {
+		headers: {
+			Accept: "application/vnd.github+json",
+			Authorization: `Bearer ${accessToken}`,
+			"User-Agent": "cf-astro-blog-starter",
+			"X-GitHub-Api-Version": "2022-11-28",
+		},
+	});
+
+	if (!response.ok) {
+		return null;
+	}
+
+	const profile = (await response.json()) as GitHubUserProfile;
+	return profile.login ? profile : null;
 }
 
 auth.get("/login", (c) => {
+	const config = getGitHubOAuthConfig(c.env);
+
 	return c.html(
 		loginPage({
-			turnstileSiteKey: getTurnstileSiteKey(c.env),
+			githubLogin: getAdminGitHubLogin(c.env),
+			oauthEnabled: Boolean(config),
 		}),
 	);
 });
 
-auth.post("/login", rateLimit, async (c) => {
-	const body = await c.req.parseBody();
-	const username = sanitizePlainText(body.username, 80);
-	const password = String(body.password || "");
-	const turnstileResponse = String(body["cf-turnstile-response"] || "");
-	const ip = c.req.header("cf-connecting-ip") || "unknown";
-	const loginOptions = {
-		turnstileSiteKey: getTurnstileSiteKey(c.env),
-	};
+auth.post("/login", (c) => c.text("当前后台仅支持 GitHub OAuth 登录喵", 405));
 
-	if (!username || !password) {
+auth.get("/github", async (c) => {
+	const config = getGitHubOAuthConfig(c.env);
+
+	if (!config) {
 		return c.html(
 			loginPage({
-				...loginOptions,
-				error: "用户名和密码不能为空喵",
+				error: "后台尚未完成 GitHub OAuth 配置喵",
+				githubLogin: getAdminGitHubLogin(c.env),
+				oauthEnabled: false,
+			}),
+			503,
+		);
+	}
+
+	const state = crypto.randomUUID();
+	const codeVerifier = createCodeVerifier();
+	const codeChallenge = await createCodeChallenge(codeVerifier);
+	const authorizeUrl = new URL("https://github.com/login/oauth/authorize");
+
+	authorizeUrl.searchParams.set("client_id", config.clientId);
+	authorizeUrl.searchParams.set(
+		"redirect_uri",
+		getResolvedRedirectUri(config, c.req.url),
+	);
+	authorizeUrl.searchParams.set("state", state);
+	authorizeUrl.searchParams.set("scope", "read:user");
+	authorizeUrl.searchParams.set("code_challenge", codeChallenge);
+	authorizeUrl.searchParams.set("code_challenge_method", "S256");
+
+	const cookieOptions = getOAuthCookieOptions(c.req.url);
+	setCookie(c, OAUTH_STATE_COOKIE, state, cookieOptions);
+	setCookie(c, OAUTH_VERIFIER_COOKIE, codeVerifier, cookieOptions);
+
+	return c.redirect(authorizeUrl.toString());
+});
+
+auth.get("/github/callback", async (c) => {
+	const config = getGitHubOAuthConfig(c.env);
+	const code = sanitizePlainText(c.req.query("code"), 200);
+	const state = sanitizePlainText(c.req.query("state"), 200);
+	const oauthError = sanitizePlainText(c.req.query("error"), 120);
+	const storedState = getCookie(c, OAUTH_STATE_COOKIE);
+	const storedVerifier = getCookie(c, OAUTH_VERIFIER_COOKIE);
+
+	deleteCookie(c, OAUTH_STATE_COOKIE, { path: "/" });
+	deleteCookie(c, OAUTH_VERIFIER_COOKIE, { path: "/" });
+
+	if (!config) {
+		return c.html(
+			loginPage({
+				error: "后台尚未完成 GitHub OAuth 配置喵",
+				githubLogin: getAdminGitHubLogin(c.env),
+				oauthEnabled: false,
+			}),
+			503,
+		);
+	}
+
+	if (oauthError) {
+		return c.html(
+			loginPage({
+				error: "GitHub 授权被取消或未完成喵",
+				githubLogin: config.adminLogin,
+				oauthEnabled: true,
 			}),
 			400,
 		);
 	}
 
-	const turnstileVerified = await verifyTurnstile(c.env, turnstileResponse, ip);
-
-	if (!turnstileVerified) {
+	if (
+		!code ||
+		!state ||
+		!storedState ||
+		!storedVerifier ||
+		!timingSafeEqualText(state, storedState)
+	) {
 		return c.html(
 			loginPage({
-				...loginOptions,
-				error: "人机验证未通过喵",
+				error: "GitHub OAuth 状态校验失败喵",
+				githubLogin: config.adminLogin,
+				oauthEnabled: true,
 			}),
 			400,
 		);
 	}
 
-	const usernameMatches = timingSafeEqualText(username, c.env.ADMIN_USERNAME);
-	const passwordMatches = await verifyPassword(
-		password,
-		c.env.ADMIN_PASSWORD_HASH,
+	const accessToken = await exchangeGitHubAccessToken(
+		config,
+		code,
+		c.req.url,
+		storedVerifier,
 	);
 
-	if (!usernameMatches || !passwordMatches) {
-		try {
-			await recordFailedAttempt(c.env, ip);
-		} catch {
-			return c.html(
-				loginPage({
-					...loginOptions,
-					error: "登录保护暂时不可用，请稍后再试喵",
-				}),
-				503,
-			);
-		}
-
+	if (!accessToken) {
 		return c.html(
 			loginPage({
-				...loginOptions,
-				error: "用户名或密码错误喵",
+				error: "GitHub 访问令牌交换失败喵",
+				githubLogin: config.adminLogin,
+				oauthEnabled: true,
 			}),
-			401,
+			502,
 		);
 	}
 
-	const session = await createSession(c.env);
-	const token = await createToken(c.env, session.id);
+	const profile = await fetchGitHubUserProfile(accessToken);
+
+	if (!profile?.login) {
+		return c.html(
+			loginPage({
+				error: "无法获取 GitHub 账号信息喵",
+				githubLogin: config.adminLogin,
+				oauthEnabled: true,
+			}),
+			502,
+		);
+	}
+
+	if (!timingSafeEqualText(profile.login, config.adminLogin)) {
+		return c.html(
+			loginPage({
+				error: `当前 GitHub 账号 ${profile.login} 没有后台权限喵`,
+				githubLogin: config.adminLogin,
+				oauthEnabled: true,
+			}),
+			403,
+		);
+	}
+
+	const session = await createSession(c.env, profile.login);
+	const token = await createToken(c.env, session);
 	setCookie(c, "admin_session", token, {
 		...getSessionCookieOptions(c.req.url),
 	});
 
-	await clearAttempts(c.env, ip).catch(() => undefined);
 	return c.redirect("/api/admin");
 });
 
@@ -177,9 +336,8 @@ auth.get("/verify", requireAuth, async (c) => {
 		{
 			authenticated: true,
 			csrfToken: session.csrfToken,
-			passwordHashFormat: isLegacyPasswordHash(c.env.ADMIN_PASSWORD_HASH)
-				? "legacy-sha256"
-				: "pbkdf2-sha256",
+			authProvider: "github-oauth",
+			username: session.username,
 		},
 		200,
 	);

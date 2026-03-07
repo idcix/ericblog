@@ -16,9 +16,9 @@ function getAttemptKey(ip: string): string {
 	return `login-rate:${ip}`;
 }
 
-function getTurnstileSiteKey(env: Env): string | undefined {
-	const siteKey = env.TURNSTILE_SITE_KEY?.trim();
-	return siteKey ? siteKey : undefined;
+function getAdminGitHubLogin(env: Env): string | undefined {
+	const login = env.ADMIN_GITHUB_LOGIN?.trim() || env.ADMIN_USERNAME?.trim();
+	return login ? login : undefined;
 }
 
 async function readAttemptState(
@@ -47,7 +47,8 @@ export async function rateLimit(c: Context<AdminAppEnv>, next: Next) {
 				return c.html(
 					loginPage({
 						error: `登录尝试过多，请 ${remainingSeconds} 秒后再试喵`,
-						turnstileSiteKey: getTurnstileSiteKey(c.env),
+						githubLogin: getAdminGitHubLogin(c.env),
+						oauthEnabled: false,
 					}),
 					429,
 				);
@@ -59,7 +60,8 @@ export async function rateLimit(c: Context<AdminAppEnv>, next: Next) {
 		return c.html(
 			loginPage({
 				error: "登录保护暂时不可用，请稍后再试喵",
-				turnstileSiteKey: getTurnstileSiteKey(c.env),
+				githubLogin: getAdminGitHubLogin(c.env),
+				oauthEnabled: false,
 			}),
 			503,
 		);
