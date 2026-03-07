@@ -74,6 +74,11 @@ const cardClassName = `post-card glass-panel ${coverSide === "right" ? "post-car
 			calc(var(--post-card-blur, 18px) * 1.6),
 			76px
 		);
+		--post-card-surface-alpha: calc((var(--post-card-opacity, 14) / 100) * 1.35);
+		--post-card-cover-blur-effective: min(
+			calc(var(--post-card-blur, 18px) * 0.78),
+			36px
+		);
 		position: relative;
 		display: grid;
 		grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.45fr);
@@ -86,7 +91,7 @@ const cardClassName = `post-card glass-panel ${coverSide === "right" ? "post-car
 			255,
 			255,
 			255,
-			calc((var(--post-card-opacity, 14) / 100) * 0.82)
+			var(--post-card-surface-alpha)
 		);
 		backdrop-filter: blur(var(--post-card-blur-effective)) saturate(150%);
 		-webkit-backdrop-filter: blur(var(--post-card-blur-effective))
@@ -133,6 +138,23 @@ const cardClassName = `post-card glass-panel ${coverSide === "right" ? "post-car
 		box-shadow:
 			inset 0 1px 0 rgba(255, 255, 255, 0.35),
 			0 16px 30px -30px rgba(8, 18, 34, 0.5);
+		z-index: 1;
+	}
+
+	.post-card-cover::after {
+		content: "";
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background: rgba(
+			255,
+			255,
+			255,
+			calc(var(--post-card-surface-alpha) * 0.52)
+		);
+		backdrop-filter: blur(var(--post-card-cover-blur-effective)) saturate(138%);
+		-webkit-backdrop-filter: blur(var(--post-card-cover-blur-effective))
+			saturate(138%);
 		z-index: 1;
 	}
 
@@ -274,12 +296,6 @@ const cardClassName = `post-card glass-panel ${coverSide === "right" ? "post-car
 	.post-card:hover {
 		transform: translate3d(0, -4px, 0) scale(1.004);
 		border-color: rgba(10, 132, 255, 0.14);
-		background: rgba(
-			255,
-			255,
-			255,
-			calc((var(--post-card-opacity, 14) / 100) + 0.06)
-		);
 		box-shadow:
 			0 22px 38px -34px rgba(8, 18, 34, 0.22),
 			0 8px 18px -16px rgba(8, 18, 34, 0.16);
