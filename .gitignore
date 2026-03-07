@@ -39,3 +39,7 @@ bun.lock
 
 # test output
 coverage/
+
+# local collaboration docs
+AGENTS.md
+operations-log.md
