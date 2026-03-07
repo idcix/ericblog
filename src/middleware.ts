@@ -26,12 +26,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
 				`frame-ancestors ${frameAncestors}`,
 				"object-src 'none'",
 				"form-action 'self'",
-				"script-src 'self' https://giscus.app",
+				"script-src 'self' https://giscus.app https://challenges.cloudflare.com",
 				"style-src 'self' 'unsafe-inline' https://giscus.app",
 				"img-src 'self' data: https://assets.ericterminal.com",
 				"font-src 'self'",
-				"connect-src 'self' https://giscus.app",
-				"frame-src 'self' https://giscus.app",
+				"connect-src 'self' https://giscus.app https://challenges.cloudflare.com",
+				"frame-src 'self' https://giscus.app https://challenges.cloudflare.com",
 			].join("; "),
 		);
 	}

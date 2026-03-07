@@ -76,8 +76,8 @@ npm run hash:password -- 你的密码
 | `ADMIN_GITHUB_LOGIN` | Variable | 允许登录后台的 GitHub 用户名 |
 | `GITHUB_OAUTH_CLIENT_ID` | Variable | GitHub OAuth 客户端 ID |
 | `GITHUB_OAUTH_CLIENT_SECRET` | Secret | GitHub OAuth 客户端密钥 |
-| `TURNSTILE_SECRET_KEY` | Secret，可选 | 开启登录人机验证时使用 |
-| `TURNSTILE_SITE_KEY` | Variable，可选 | 登录页渲染 Turnstile 时使用 |
+| `TURNSTILE_SECRET_KEY` | Secret，可选 | 开启登录页与友链申请的人机验证时使用 |
+| `TURNSTILE_SITE_KEY` | Variable，可选 | 登录页/友链申请页渲染 Turnstile 时使用 |
 
 ## Cloudflare Dashboard 关联仓库部署
 
@@ -92,8 +92,8 @@ npm run hash:password -- 你的密码
 | `GITHUB_OAUTH_CLIENT_ID` | Variable | 是 | Cloudflare Variable | GitHub OAuth 应用 Client ID |
 | `GITHUB_OAUTH_CLIENT_SECRET` | Secret | 是 | Cloudflare Secret | GitHub OAuth 应用 Client Secret |
 | `GITHUB_OAUTH_REDIRECT_URI` | Variable | 否 | Cloudflare Variable | 可选，留空会按当前域名自动推导回调地址 |
-| `TURNSTILE_SITE_KEY` | Variable | 否 | Cloudflare Variable | 可选，登录页验证码站点 Key |
-| `TURNSTILE_SECRET_KEY` | Secret | 否 | Cloudflare Secret | 可选，登录验证码服务端密钥 |
+| `TURNSTILE_SITE_KEY` | Variable | 否 | Cloudflare Variable | 可选，登录页与友链申请页验证码站点 Key |
+| `TURNSTILE_SECRET_KEY` | Secret | 否 | Cloudflare Secret | 可选，登录页与友链申请验证码服务端密钥 |
 | `SITE_NAME` | Variable | 建议 | Cloudflare Variable | 站点名称 |
 | `SITE_URL` | Variable | 建议 | Cloudflare Variable | 站点主域名 |
 

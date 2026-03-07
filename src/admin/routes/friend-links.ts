@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { friendLinks } from "@/db/schema";
 import { getDb } from "@/lib/db";
@@ -14,6 +15,11 @@ interface FriendLinkApplicationInput {
 	description: string;
 	contact: string;
 	note: string | null;
+}
+
+interface TurnstileVerifyResponse {
+	success?: boolean;
+	"error-codes"?: string[];
 }
 
 function getBodyText(body: Record<string, unknown>, key: string): string {
@@ -66,9 +72,64 @@ function parseApplicationInput(
 	} as const;
 }
 
+async function verifyTurnstileToken(c: Context<AdminAppEnv>, token: string) {
+	const secret = String(c.env.TURNSTILE_SECRET_KEY || "").trim();
+	if (!secret) {
+		return { success: true, skipped: true } as const;
+	}
+
+	if (!token) {
+		return { success: false, reason: "missing-token" } as const;
+	}
+
+	const formData = new URLSearchParams();
+	formData.set("secret", secret);
+	formData.set("response", token);
+
+	const remoteIp =
+		c.req.header("CF-Connecting-IP") ||
+		c.req
+			.header("x-forwarded-for")
+			?.split(",")
+			.map((item) => item.trim())
+			.filter(Boolean)[0];
+	if (remoteIp) {
+		formData.set("remoteip", remoteIp);
+	}
+
+	try {
+		const response = await fetch(
+			"https://challenges.cloudflare.com/turnstile/v0/siteverify",
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: formData.toString(),
+			},
+		);
+		if (!response.ok) {
+			return { success: false, reason: "verify-request-failed" } as const;
+		}
+
+		const payload = (await response.json()) as TurnstileVerifyResponse;
+		if (!payload.success) {
+			return { success: false, reason: "verify-failed" } as const;
+		}
+
+		return { success: true, skipped: false } as const;
+	} catch {
+		return { success: false, reason: "verify-exception" } as const;
+	}
+}
+
 friendLinksRoutes.post("/apply", async (c) => {
 	const db = getDb(c.env.DB);
 	const body = await c.req.parseBody();
+	const turnstileToken = getBodyText(body, "cf-turnstile-response");
+	const verifyResult = await verifyTurnstileToken(c, turnstileToken);
+	if (!verifyResult.success) {
+		return c.redirect("/friends/apply?apply=challenge-failed");
+	}
+
 	const parsed = parseApplicationInput(body);
 	if ("error" in parsed) {
 		return c.redirect("/friends/apply?apply=invalid");

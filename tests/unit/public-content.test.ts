@@ -114,5 +114,27 @@ describe("源码回归保护", () => {
 		assert.ok(friendsSource.includes('href="/friends/apply"'));
 		assert.ok(!friendsSource.includes('action="/api/friend-links/apply"'));
 		assert.ok(applyPageSource.includes('action="/api/friend-links/apply"'));
+		assert.ok(
+			applyPageSource.includes(
+				"https://challenges.cloudflare.com/turnstile/v0/api.js",
+			),
+		);
+		assert.ok(applyPageSource.includes('class="cf-turnstile"'));
+	});
+
+	test("友链申请接口会校验 Turnstile token", async () => {
+		const source = await readFile("src/admin/routes/friend-links.ts", "utf8");
+
+		assert.ok(source.includes("cf-turnstile-response"));
+		assert.ok(
+			source.includes(
+				"https://challenges.cloudflare.com/turnstile/v0/siteverify",
+			),
+		);
+	});
+
+	test("公共页面 CSP 放行 Turnstile 域名", async () => {
+		const source = await readFile("src/middleware.ts", "utf8");
+		assert.ok(source.includes("https://challenges.cloudflare.com"));
 	});
 });
