@@ -2,6 +2,112 @@ const slugInput = document.getElementById("slug");
 const titleInput = document.getElementById("title");
 const tagIdsInput = document.getElementById("tagIds");
 const slugPreview = document.querySelector("[data-slug-preview]");
+const categorySelect = document.getElementById("categoryId");
+const newCategoryWrap = document.querySelector("[data-new-category-wrap='true']");
+const newCategoryInput = document.getElementById("newCategoryName");
+const contentTextarea = document.getElementById("content");
+const contentUploadStatus = document.querySelector("[data-content-upload-status]");
+const editorForm = document.querySelector("form[data-editor-upload-url]");
+const editorUploadUrl =
+	editorForm instanceof HTMLFormElement
+		? (editorForm.dataset.editorUploadUrl ?? "")
+		: "";
+const editorCsrfToken =
+	editorForm instanceof HTMLFormElement
+		? (editorForm.dataset.editorCsrfToken ?? "")
+		: "";
+
+function setStatusMessage(target, message, mode = "") {
+	if (!(target instanceof HTMLElement)) {
+		return;
+	}
+
+	target.textContent = message;
+	target.classList.remove("is-error", "is-success");
+	if (mode === "error") {
+		target.classList.add("is-error");
+	}
+	if (mode === "success") {
+		target.classList.add("is-success");
+	}
+}
+
+async function uploadImageToMedia(file, uploadUrl, csrfToken) {
+	if (!file || !uploadUrl || !csrfToken) {
+		throw new Error("上传配置缺失，请刷新页面后重试喵");
+	}
+
+	const formData = new FormData();
+	formData.append("_csrf", csrfToken);
+	formData.append("file", file);
+
+	const response = await fetch(uploadUrl, {
+		method: "POST",
+		body: formData,
+		credentials: "same-origin",
+	});
+
+	const payload = await response.json().catch(() => ({}));
+	if (!response.ok || !payload?.key) {
+		throw new Error(payload?.message || "图片上传失败，请重试喵");
+	}
+
+	return {
+		key: payload.key,
+		url: payload.url || `/media/${payload.key}`,
+	};
+}
+
+function getFirstImageFile(fileList) {
+	if (!fileList) {
+		return null;
+	}
+
+	for (const file of fileList) {
+		if (file.type.startsWith("image/")) {
+			return file;
+		}
+	}
+
+	return null;
+}
+
+function insertMarkdownImage(textarea, file, url) {
+	if (!(textarea instanceof HTMLTextAreaElement)) {
+		return;
+	}
+
+	const altRaw = (file?.name || "图片").replace(/\.[^.]+$/u, "").trim();
+	const alt = altRaw || "图片";
+	const markdown = `![${alt}](${url})`;
+	const start = textarea.selectionStart ?? textarea.value.length;
+	const end = textarea.selectionEnd ?? start;
+	const before = textarea.value.slice(0, start);
+	const after = textarea.value.slice(end);
+	const prefix = before && !before.endsWith("\n") ? "\n" : "";
+	const suffix = after && !after.startsWith("\n") ? "\n" : "";
+	const inserted = `${prefix}${markdown}${suffix}`;
+
+	textarea.setRangeText(inserted, start, end, "end");
+	textarea.focus();
+}
+
+function syncNewCategoryInputVisibility() {
+	const isCreatingNew =
+		categorySelect instanceof HTMLSelectElement &&
+		categorySelect.value === "__new__";
+
+	if (newCategoryWrap instanceof HTMLElement) {
+		newCategoryWrap.hidden = !isCreatingNew;
+	}
+
+	if (newCategoryInput instanceof HTMLInputElement) {
+		newCategoryInput.required = isCreatingNew;
+		if (!isCreatingNew) {
+			newCategoryInput.value = "";
+		}
+	}
+}
 
 function buildSlugValue(value) {
 	return value
@@ -77,6 +183,9 @@ for (const checkbox of document.querySelectorAll("input[data-tag-checkbox='true'
 	checkbox.addEventListener("change", updateTagIds);
 }
 
+categorySelect?.addEventListener("change", syncNewCategoryInputVisibility);
+syncNewCategoryInputVisibility();
+
 for (const uploader of document.querySelectorAll("[data-cover-uploader='true']")) {
 	if (!(uploader instanceof HTMLElement)) {
 		continue;
@@ -121,9 +230,7 @@ for (const uploader of document.querySelectorAll("[data-cover-uploader='true']")
 	};
 
 	const setStatus = (message) => {
-		if (status instanceof HTMLElement) {
-			status.textContent = message;
-		}
+		setStatusMessage(status, message);
 	};
 
 	const setCoverValue = (key, url) => {
@@ -151,29 +258,16 @@ for (const uploader of document.querySelectorAll("[data-cover-uploader='true']")
 			return;
 		}
 
-		const formData = new FormData();
-		formData.append("_csrf", csrfToken);
-		formData.append("file", file);
 		setStatus("正在上传封面，请稍候喵");
 
 		try {
-			const response = await fetch(uploadUrl, {
-				method: "POST",
-				body: formData,
-				credentials: "same-origin",
-			});
-
-			const payload = await response.json().catch(() => ({}));
-			if (!response.ok || !payload?.key) {
-				setStatus(payload?.message || "封面上传失败，请重试喵");
-				return;
-			}
-
-			const imageUrl = payload.url || `/media/${payload.key}`;
-			setCoverValue(payload.key, imageUrl);
-			setStatus("封面上传成功，已自动填入键名喵");
-		} catch {
-			setStatus("封面上传失败，请检查网络后重试喵");
+			const uploaded = await uploadImageToMedia(file, uploadUrl, csrfToken);
+			setCoverValue(uploaded.key, uploaded.url);
+			setStatusMessage(status, "封面上传成功，已自动填入键名喵", "success");
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : "封面上传失败，请检查网络后重试喵";
+			setStatusMessage(status, message, "error");
 		}
 	};
 
@@ -230,6 +324,65 @@ for (const uploader of document.querySelectorAll("[data-cover-uploader='true']")
 		void uploadFile(file);
 	});
 }
+
+const handleEditorImageUpload = async (file) => {
+	if (!(contentTextarea instanceof HTMLTextAreaElement) || !file) {
+		return;
+	}
+
+	setStatusMessage(contentUploadStatus, "正在上传图片并插入正文，请稍候喵");
+	try {
+		const uploaded = await uploadImageToMedia(file, editorUploadUrl, editorCsrfToken);
+		insertMarkdownImage(contentTextarea, file, uploaded.url);
+		setStatusMessage(contentUploadStatus, "图片上传完成，已插入正文喵", "success");
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "正文图片上传失败，请稍后重试喵";
+		setStatusMessage(contentUploadStatus, message, "error");
+	}
+};
+
+contentTextarea?.addEventListener("dragover", (event) => {
+	const file = getFirstImageFile(event.dataTransfer?.files);
+	if (!file) {
+		return;
+	}
+
+	event.preventDefault();
+	if (contentTextarea instanceof HTMLTextAreaElement) {
+		contentTextarea.classList.add("is-dragover");
+	}
+});
+
+contentTextarea?.addEventListener("dragleave", () => {
+	if (contentTextarea instanceof HTMLTextAreaElement) {
+		contentTextarea.classList.remove("is-dragover");
+	}
+});
+
+contentTextarea?.addEventListener("drop", (event) => {
+	const file = getFirstImageFile(event.dataTransfer?.files);
+	if (!file) {
+		return;
+	}
+
+	event.preventDefault();
+	if (contentTextarea instanceof HTMLTextAreaElement) {
+		contentTextarea.classList.remove("is-dragover");
+	}
+
+	void handleEditorImageUpload(file);
+});
+
+contentTextarea?.addEventListener("paste", (event) => {
+	const file = getFirstImageFile(event.clipboardData?.files);
+	if (!file) {
+		return;
+	}
+
+	event.preventDefault();
+	void handleEditorImageUpload(file);
+});
 
 updateSlugPreview();
 if (slugInput instanceof HTMLInputElement && !slugInput.value) {

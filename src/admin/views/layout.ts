@@ -614,11 +614,27 @@ export const adminSharedStyles = `
 			font-family: var(--font-mono);
 		}
 
+		.form-textarea.is-dragover {
+			border-color: rgba(10, 132, 255, 0.55);
+			background: rgba(10, 132, 255, 0.08);
+			box-shadow:
+				0 0 0 4px rgba(10, 132, 255, 0.16),
+				inset 0 1px 0 rgba(255, 255, 255, 0.28);
+		}
+
 		.form-help {
 			margin-top: 0.4rem;
 			color: var(--text-muted);
 			font-size: 0.8rem;
 			line-height: 1.6;
+		}
+
+		.form-help.is-error {
+			color: var(--danger);
+		}
+
+		.form-help.is-success {
+			color: var(--success);
 		}
 
 		.form-readonly {
@@ -679,6 +695,10 @@ export const adminSharedStyles = `
 			display: flex;
 			flex-wrap: wrap;
 			gap: 0.6rem;
+		}
+
+		.new-category-wrap {
+			margin-top: 0.7rem;
 		}
 
 		.sr-only {

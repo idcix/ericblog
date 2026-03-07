@@ -42,7 +42,12 @@ export function postEditorPage(data: EditorData): string {
 		<h1>${isEdit ? "编辑文章" : "新建文章"}</h1>
 		${error ? `<div class="alert alert-error">${escapeHtml(error)}</div>` : ""}
 
-		<form method="post" action="${escapeAttribute(formAction)}">
+		<form
+			method="post"
+			action="${escapeAttribute(formAction)}"
+			data-editor-upload-url="/api/admin/media/upload-async"
+			data-editor-csrf-token="${escapeAttribute(csrfToken)}"
+		>
 			<input type="hidden" name="_csrf" value="${escapeAttribute(csrfToken)}" />
 			<div class="editor-grid">
 				<div class="editor-panel">
@@ -77,6 +82,8 @@ export function postEditorPage(data: EditorData): string {
 					<div class="form-group">
 						<label for="content">正文（Markdown）</label>
 						<textarea id="content" name="content" class="form-textarea" required>${escapeTextarea(post?.content || "")}</textarea>
+						<p class="form-help">可以把图片直接拖到正文里，系统会自动上传并插入 Markdown 图片语法喵</p>
+						<p class="form-help" data-content-upload-status>支持 JPG、PNG、WEBP、AVIF、GIF，单图不超过 5MB 喵</p>
 					</div>
 				</div>
 
@@ -95,16 +102,19 @@ export function postEditorPage(data: EditorData): string {
 						<select id="categoryId" name="categoryId" class="form-select">
 							<option value="">未分类</option>
 							${categories.map((cat) => `<option value="${cat.id}" ${post?.categoryId === cat.id ? "selected" : ""}>${escapeHtml(cat.name)}</option>`).join("")}
+							<option value="__new__">+ 新建分类</option>
 						</select>
-						<input
-							type="text"
-							id="newCategoryName"
-							name="newCategoryName"
-							class="form-input"
-							maxlength="60"
-							placeholder="输入新分类名，保存时自动创建并使用"
-						/>
-						<p class="form-help">如果你填了新分类名，会优先使用新分类喵</p>
+						<div class="new-category-wrap" data-new-category-wrap="true" hidden>
+							<input
+								type="text"
+								id="newCategoryName"
+								name="newCategoryName"
+								class="form-input"
+								maxlength="60"
+								placeholder="输入新分类名，保存时自动创建并使用"
+							/>
+							<p class="form-help">输入后会自动创建这个分类并用于当前文章喵</p>
+						</div>
 					</div>
 
 					<div class="form-group">
@@ -150,7 +160,8 @@ export function postEditorPage(data: EditorData): string {
 					</div>
 
 					<details>
-						<summary>SEO 设置</summary>
+						<summary>SEO 设置（可选）</summary>
+						<p class="form-help">SEO 就是给搜索引擎和社交平台看的标题与描述，不填也能正常发文喵</p>
 						<div class="form-group">
 							<label for="metaTitle">SEO 标题</label>
 							<input type="text" id="metaTitle" name="metaTitle" class="form-input" value="${escapeAttribute(post?.metaTitle || "")}" maxlength="200" />

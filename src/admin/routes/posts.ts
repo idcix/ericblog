@@ -84,10 +84,12 @@ function parsePostInput(body: Record<string, unknown>): ParsedPostInputResult {
 	}
 
 	const categoryIdRaw = String(body.categoryId ?? "").trim();
-	const categoryId = categoryIdRaw
-		? parseOptionalPositiveInt(categoryIdRaw)
-		: null;
-	if (categoryIdRaw && categoryId === null) {
+	const isNewCategorySelected = categoryIdRaw === "__new__";
+	const categoryId =
+		categoryIdRaw && !isNewCategorySelected
+			? parseOptionalPositiveInt(categoryIdRaw)
+			: null;
+	if (categoryIdRaw && !isNewCategorySelected && categoryId === null) {
 		return { error: "分类参数不合法喵" } as const;
 	}
 
@@ -110,6 +112,10 @@ function parsePostInput(body: Record<string, unknown>): ParsedPostInputResult {
 	const newTagNamesRaw = sanitizePlainText(body.newTagNames, 400, {
 		allowNewlines: true,
 	});
+	const newCategoryName = sanitizePlainText(body.newCategoryName, 60) || null;
+	if (isNewCategorySelected && !newCategoryName) {
+		return { error: "你选择了新建分类，请输入分类名称喵" } as const;
+	}
 
 	return {
 		data: {
@@ -126,7 +132,7 @@ function parsePostInput(body: Record<string, unknown>): ParsedPostInputResult {
 			metaKeywords: sanitizePlainText(body.metaKeywords, 200) || null,
 			canonicalUrl,
 			categoryId,
-			newCategoryName: sanitizePlainText(body.newCategoryName, 60) || null,
+			newCategoryName,
 			tagIds: parseTagIds(body.tagIds),
 			newTagNames: [
 				...new Set(
