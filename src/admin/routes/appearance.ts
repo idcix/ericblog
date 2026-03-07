@@ -53,6 +53,16 @@ function getBodyTexts(body: AppearanceFormBody, key: string): string[] {
 	return [];
 }
 
+function getBodyFile(body: AppearanceFormBody, key: string): File | null {
+	const value = body[key];
+	if (Array.isArray(value)) {
+		const firstFile = value.find((item): item is File => item instanceof File);
+		return firstFile ?? null;
+	}
+
+	return value instanceof File ? value : null;
+}
+
 function buildLinkItemsFromBody(
 	labels: string[],
 	hrefs: string[],
@@ -716,12 +726,12 @@ appearance.post("/", async (c) => {
 
 appearance.post("/background/upload", async (c) => {
 	const session = getAuthenticatedSession(c);
-	const body = await c.req.parseBody();
-	if (!assertCsrfToken(body._csrf, session)) {
+	const body = (await c.req.parseBody({ all: true })) as AppearanceFormBody;
+	if (!assertCsrfToken(getBodyText(body, "_csrf"), session)) {
 		return c.text("CSRF 校验失败喵", 403);
 	}
 
-	const file = body.file;
+	const file = getBodyFile(body, "file");
 	if (!(file instanceof File)) {
 		return c.html(
 			renderAppearanceErrorPage(session.csrfToken, "请选择要上传的背景图片喵"),
@@ -767,8 +777,8 @@ appearance.post("/background/upload", async (c) => {
 
 appearance.post("/background/clear", async (c) => {
 	const session = getAuthenticatedSession(c);
-	const body = await c.req.parseBody();
-	if (!assertCsrfToken(body._csrf, session)) {
+	const body = (await c.req.parseBody({ all: true })) as AppearanceFormBody;
+	if (!assertCsrfToken(getBodyText(body, "_csrf"), session)) {
 		return c.text("CSRF 校验失败喵", 403);
 	}
 

@@ -673,6 +673,7 @@ function submitAppearanceUpload() {
 	const form = uploadInput.form;
 	form.action = "/api/admin/appearance/background/upload";
 	form.method = "post";
+	form.enctype = "multipart/form-data";
 	form.submit();
 }
 
