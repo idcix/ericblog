@@ -4,6 +4,20 @@ export interface SiteConfig {
 	description: string;
 	author: string;
 	language: string;
+	comments: CommentConfig;
+}
+
+export interface CommentConfig {
+	provider: "giscus";
+	repo: string;
+	repoId: string;
+	category: string;
+	categoryId: string;
+	mapping: "pathname" | "url" | "title" | "og:title";
+	strict: boolean;
+	reactionsEnabled: boolean;
+	inputPosition: "top" | "bottom";
+	lang: string;
 }
 
 export const siteConfig: SiteConfig = {
@@ -12,6 +26,18 @@ export const siteConfig: SiteConfig = {
 	description: "记录 Cloudflare、前端工程、系统设计与长期有效的技术经验。",
 	author: "Eric",
 	language: "zh-CN",
+	comments: {
+		provider: "giscus",
+		repo: "Eric-Terminal/cf-astro-blog-starter",
+		repoId: "R_kgDORgHXcA",
+		category: "General",
+		categoryId: "",
+		mapping: "pathname",
+		strict: false,
+		reactionsEnabled: true,
+		inputPosition: "top",
+		lang: "zh-CN",
+	},
 };
 
 export interface PaginationParams {

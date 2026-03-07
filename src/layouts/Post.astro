@@ -1,4 +1,5 @@
 ---
+import CommentsPanel from "@/components/CommentsPanel.astro";
 import { formatDate } from "@/lib/format";
 import Base from "./Base.astro";
 
@@ -49,6 +50,7 @@ const formattedDate = publishedAt ? formatDate(publishedAt) : null;
 				<slot />
 			</div>
 		</div>
+		<CommentsPanel />
 	</article>
 </Base>
 
