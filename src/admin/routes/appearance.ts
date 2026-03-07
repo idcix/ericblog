@@ -146,6 +146,18 @@ function renderAppearancePage(options: {
 	alert?: { type: "success" | "error"; message: string };
 }) {
 	const { csrfToken, settings, alert } = options;
+	const backgroundScaleOffset = Math.min(
+		80,
+		Math.max(0, settings.backgroundScale - 100),
+	);
+	const backgroundPositionXOffset = Math.min(
+		50,
+		Math.max(-50, settings.backgroundPositionX - 50),
+	);
+	const backgroundPositionYOffset = Math.min(
+		50,
+		Math.max(-50, settings.backgroundPositionY - 50),
+	);
 	const alertHtml = alert
 		? `<div class="alert alert-${escapeAttribute(alert.type)}">${escapeHtml(alert.message)}</div>`
 		: "";
@@ -535,13 +547,14 @@ function renderAppearancePage(options: {
 			<div class="appearance-stack">
 				<section class="appearance-panel">
 					<h2>背景视觉参数</h2>
+					<p class="appearance-note">缩放 0% 表示原始比例；横向/纵向焦点 0% 表示画面居中。</p>
 					<div class="appearance-controls">
 						<div class="appearance-range">
 							<div class="appearance-range-meta">
 								<label for="backgroundScale">缩放</label>
-								<span data-appearance-display="backgroundScale">${escapeHtml(String(settings.backgroundScale))}%</span>
+								<span data-appearance-display="backgroundScale">${escapeHtml(String(backgroundScaleOffset))}%</span>
 							</div>
-							<input id="backgroundScale" name="backgroundScale" type="range" min="100" max="180" value="${escapeAttribute(String(settings.backgroundScale))}" data-appearance-control="backgroundScale" />
+							<input id="backgroundScale" name="backgroundScale" type="range" min="0" max="80" value="${escapeAttribute(String(backgroundScaleOffset))}" data-appearance-control="backgroundScale" />
 						</div>
 						<div class="appearance-range">
 							<div class="appearance-range-meta">
@@ -553,16 +566,16 @@ function renderAppearancePage(options: {
 						<div class="appearance-range">
 							<div class="appearance-range-meta">
 								<label for="backgroundPositionX">横向焦点</label>
-								<span data-appearance-display="backgroundPositionX">${escapeHtml(String(settings.backgroundPositionX))}%</span>
+								<span data-appearance-display="backgroundPositionX">${escapeHtml(String(backgroundPositionXOffset))}%</span>
 							</div>
-							<input id="backgroundPositionX" name="backgroundPositionX" type="range" min="0" max="100" value="${escapeAttribute(String(settings.backgroundPositionX))}" data-appearance-control="backgroundPositionX" />
+							<input id="backgroundPositionX" name="backgroundPositionX" type="range" min="-50" max="50" value="${escapeAttribute(String(backgroundPositionXOffset))}" data-appearance-control="backgroundPositionX" />
 						</div>
 						<div class="appearance-range">
 							<div class="appearance-range-meta">
 								<label for="backgroundPositionY">纵向焦点</label>
-								<span data-appearance-display="backgroundPositionY">${escapeHtml(String(settings.backgroundPositionY))}%</span>
+								<span data-appearance-display="backgroundPositionY">${escapeHtml(String(backgroundPositionYOffset))}%</span>
 							</div>
-							<input id="backgroundPositionY" name="backgroundPositionY" type="range" min="0" max="100" value="${escapeAttribute(String(settings.backgroundPositionY))}" data-appearance-control="backgroundPositionY" />
+							<input id="backgroundPositionY" name="backgroundPositionY" type="range" min="-50" max="50" value="${escapeAttribute(String(backgroundPositionYOffset))}" data-appearance-control="backgroundPositionY" />
 						</div>
 					</div>
 				</section>
@@ -694,13 +707,12 @@ appearance.post("/", async (c) => {
 	await saveSiteAppearance(getDb(c.env.DB), {
 		backgroundImageKey: backgroundImageKey || null,
 		backgroundBlur: Number(getBodyText(body, "backgroundBlur") || Number.NaN),
-		backgroundScale: Number(getBodyText(body, "backgroundScale") || Number.NaN),
-		backgroundPositionX: Number(
-			getBodyText(body, "backgroundPositionX") || Number.NaN,
-		),
-		backgroundPositionY: Number(
-			getBodyText(body, "backgroundPositionY") || Number.NaN,
-		),
+		backgroundScale:
+			100 + Number(getBodyText(body, "backgroundScale") || Number.NaN),
+		backgroundPositionX:
+			50 + Number(getBodyText(body, "backgroundPositionX") || Number.NaN),
+		backgroundPositionY:
+			50 + Number(getBodyText(body, "backgroundPositionY") || Number.NaN),
 		headerSubtitle: getBodyText(body, "headerSubtitle"),
 		navLinks: buildLinkItemsFromBody(
 			getBodyTexts(body, "navLinkLabel"),
