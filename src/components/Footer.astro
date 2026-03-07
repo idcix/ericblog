@@ -13,11 +13,6 @@ const year = new Date().getFullYear();
 					把工程经验、调试记录和长期有效的判断慢慢沉淀下来。
 				</p>
 			</div>
-			<nav class="footer-links">
-				<a href="/blog">归档</a>
-				<a href="/search">搜索</a>
-				<a href="/sitemap.xml">站点地图</a>
-			</nav>
 			<p class="footer-meta">© {year} · {siteConfig.author}</p>
 		</div>
 	</div>
@@ -31,7 +26,7 @@ const year = new Date().getFullYear();
 
 	.footer-inner {
 		display: grid;
-		grid-template-columns: minmax(0, 1.4fr) auto auto;
+		grid-template-columns: minmax(0, 1fr) auto;
 		gap: var(--space-lg);
 		align-items: center;
 		padding: 1.2rem 1.4rem;
@@ -52,25 +47,6 @@ const year = new Date().getFullYear();
 	.footer-meta {
 		font-size: 0.9rem;
 		color: var(--color-text-muted);
-	}
-
-	.footer-links {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.6rem;
-		justify-content: center;
-	}
-
-	.footer-links a {
-		color: var(--color-text-secondary);
-		padding: 0.6rem 0.95rem;
-		border-radius: var(--radius-pill);
-		background: rgba(255, 255, 255, 0.06);
-		border: 1px solid rgba(255, 255, 255, 0.1);
-	}
-
-	.footer-links a:hover {
-		color: var(--color-accent-hover);
 	}
 
 	@media (max-width: 860px) {
