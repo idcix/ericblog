@@ -12,4 +12,25 @@ describe("页脚精简保护喵", () => {
 		assert.ok(!footerSource.includes('href="/sitemap.xml"'));
 		assert.match(footerSource, /footer-meta/u);
 	});
+
+	test("页脚会在接近页面底部时缓慢上浮出现喵", async () => {
+		const [
+			footerSource,
+			baseLayoutSource,
+			globalStylesSource,
+			footerScriptSource,
+		] = await Promise.all([
+			readFile("src/components/Footer.astro", "utf8"),
+			readFile("src/layouts/Base.astro", "utf8"),
+			readFile("src/styles/global.css", "utf8"),
+			readFile("public/footer-reveal.js", "utf8"),
+		]);
+
+		assert.match(footerSource, /data-footer-reveal/u);
+		assert.match(footerSource, /\.site-footer\.is-visible/u);
+		assert.match(baseLayoutSource, /footer-reveal\.js/u);
+		assert.match(globalStylesSource, /--footer-reveal-space:/u);
+		assert.match(footerScriptSource, /remaining <=/u);
+		assert.match(footerScriptSource, /is-visible/u);
+	});
 });

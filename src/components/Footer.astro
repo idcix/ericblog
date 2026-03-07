@@ -4,7 +4,7 @@ import { siteConfig } from "@/lib/types";
 const year = new Date().getFullYear();
 ---
 
-<footer class="site-footer">
+<footer class="site-footer" data-footer-reveal>
 	<div class="container">
 		<div class="footer-inner glass-panel">
 			<div class="footer-copy">
@@ -20,8 +20,25 @@ const year = new Date().getFullYear();
 
 <style>
 	.site-footer {
-		padding-top: var(--space-xl);
-		margin-top: auto;
+		position: fixed;
+		inset-inline: 0;
+		bottom: calc((var(--footer-reveal-height) + 1.6rem) * -1);
+		z-index: 24;
+		padding-inline: 0;
+		opacity: 0;
+		pointer-events: none;
+		transform: translate3d(0, 16px, 0);
+		transition:
+			bottom 980ms cubic-bezier(0.25, 1.1, 0.5, 1),
+			transform 520ms cubic-bezier(0.22, 1, 0.36, 1),
+			opacity 420ms ease;
+	}
+
+	.site-footer.is-visible {
+		bottom: 0.95rem;
+		opacity: 1;
+		pointer-events: auto;
+		transform: translate3d(0, 0, 0);
 	}
 
 	.footer-inner {
@@ -50,6 +67,10 @@ const year = new Date().getFullYear();
 	}
 
 	@media (max-width: 860px) {
+		.site-footer.is-visible {
+			bottom: 0.7rem;
+		}
+
 		.footer-inner {
 			grid-template-columns: 1fr;
 			justify-items: center;
