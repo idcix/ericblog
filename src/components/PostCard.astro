@@ -74,12 +74,12 @@ const formattedDate = publishedAt ? formatDate(publishedAt) : null;
 	}
 
 	.post-card:hover {
-		transform: translate3d(0, -10px, 0) scale(1.01);
-		border-color: rgba(10, 132, 255, 0.18);
+		transform: translate3d(0, -4px, 0) scale(1.004);
+		border-color: rgba(10, 132, 255, 0.14);
 		background: rgba(255, 255, 255, 0.2);
 		box-shadow:
-			0 30px 48px -34px rgba(8, 18, 34, 0.26),
-			0 10px 24px -18px rgba(8, 18, 34, 0.18);
+			0 22px 38px -34px rgba(8, 18, 34, 0.22),
+			0 8px 18px -16px rgba(8, 18, 34, 0.16);
 	}
 
 	.post-card:hover::after {
@@ -119,14 +119,8 @@ const formattedDate = publishedAt ? formatDate(publishedAt) : null;
 		color: var(--color-accent-hover);
 	}
 
-	.post-card:hover .pill-row {
-		transform: translate3d(0, -2px, 0);
-	}
-
 	.post-card:hover .post-card-title {
 		color: var(--color-accent-hover);
-		letter-spacing: -0.015em;
-		transform: translate3d(2px, 0, 0);
 	}
 
 	.post-card-excerpt {
@@ -141,7 +135,6 @@ const formattedDate = publishedAt ? formatDate(publishedAt) : null;
 
 	.post-card:hover .post-card-excerpt {
 		color: var(--color-text);
-		transform: translate3d(0, 2px, 0);
 	}
 
 	.post-card-meta {
@@ -156,14 +149,6 @@ const formattedDate = publishedAt ? formatDate(publishedAt) : null;
 	.post-card-readmore {
 		color: var(--color-accent);
 		font-weight: 600;
-	}
-
-	.post-card:hover .post-card-meta {
-		transform: translate3d(0, 3px, 0);
-	}
-
-	.post-card:hover .post-card-readmore {
-		transform: translate3d(4px, 0, 0);
 	}
 
 	@keyframes post-card-settle {
@@ -181,6 +166,44 @@ const formattedDate = publishedAt ? formatDate(publishedAt) : null;
 	@media (max-width: 640px) {
 		.post-card-meta {
 			flex-wrap: wrap;
+		}
+	}
+
+	@media (hover: hover) and (pointer: fine) {
+		.post-card:hover {
+			transform: translate3d(0, -10px, 0) scale(1.01);
+			border-color: rgba(10, 132, 255, 0.18);
+			box-shadow:
+				0 30px 48px -34px rgba(8, 18, 34, 0.26),
+				0 10px 24px -18px rgba(8, 18, 34, 0.18);
+		}
+
+		.post-card:hover .pill-row {
+			transform: translate3d(0, -2px, 0);
+		}
+
+		.post-card:hover .post-card-title {
+			letter-spacing: -0.015em;
+			transform: translate3d(2px, 0, 0);
+		}
+
+		.post-card:hover .post-card-excerpt {
+			transform: translate3d(0, 2px, 0);
+		}
+
+		.post-card:hover .post-card-meta {
+			transform: translate3d(0, 3px, 0);
+		}
+
+		.post-card:hover .post-card-readmore {
+			transform: translate3d(4px, 0, 0);
+		}
+	}
+
+	@media (hover: none), (pointer: coarse) {
+		.post-card:hover {
+			transform: none;
+			box-shadow: var(--shadow-card);
 		}
 	}
 
