@@ -73,10 +73,37 @@ media.get("/", async (c) => {
 
 	const content = `
 		<h1>媒体库</h1>
-		<form method="post" action="/api/admin/media/upload" enctype="multipart/form-data" class="upload-form">
+		<form
+			method="post"
+			action="/api/admin/media/upload"
+			enctype="multipart/form-data"
+			class="upload-form media-upload-form"
+			data-media-upload-form="true"
+		>
 			<input type="hidden" name="_csrf" value="${escapeAttribute(session.csrfToken)}" />
-			<input type="file" name="file" accept="${escapeAttribute(getAllowedMediaAcceptValue())}" required />
-			<button type="submit" class="btn btn-primary">上传</button>
+			<input
+				type="file"
+				id="mediaUploadInput"
+				name="file"
+				accept="${escapeAttribute(getAllowedMediaAcceptValue())}"
+				class="media-upload-input"
+				data-media-upload-input="true"
+				required
+			/>
+			<label
+				for="mediaUploadInput"
+				class="media-upload-dropzone"
+				data-media-upload-dropzone="true"
+				tabindex="0"
+			>
+				<span class="media-upload-copy">
+					<strong>拖拽图片到这里，或点击选择文件</strong>
+					<span data-media-upload-filename="true">支持 JPG、PNG、WEBP、AVIF、GIF，单个文件不超过 5 MB</span>
+				</span>
+			</label>
+			<div class="media-upload-actions">
+				<button type="submit" class="btn btn-primary">上传</button>
+			</div>
 		</form>
 		<div class="media-grid">
 			${

@@ -19,6 +19,52 @@ const editorCsrfToken =
 	editorForm instanceof HTMLFormElement
 		? (editorForm.dataset.editorCsrfToken ?? "")
 		: "";
+const mediaUploadForm = document.querySelector("[data-media-upload-form='true']");
+const mediaUploadInput = document.querySelector("[data-media-upload-input='true']");
+const mediaUploadDropzone = document.querySelector(
+	"[data-media-upload-dropzone='true']",
+);
+const mediaUploadFilename = document.querySelector(
+	"[data-media-upload-filename='true']",
+);
+
+function updateMediaUploadFilename(file) {
+	if (!(mediaUploadFilename instanceof HTMLElement)) {
+		return;
+	}
+
+	if (!(file instanceof File)) {
+		mediaUploadFilename.textContent =
+			"支持 JPG、PNG、WEBP、AVIF、GIF，单个文件不超过 5 MB";
+		return;
+	}
+
+	mediaUploadFilename.textContent = `已选择：${file.name}`;
+}
+
+function submitMediaUploadForm() {
+	if (
+		!(mediaUploadForm instanceof HTMLFormElement) ||
+		!(mediaUploadInput instanceof HTMLInputElement) ||
+		!mediaUploadInput.files?.[0]
+	) {
+		return;
+	}
+
+	mediaUploadForm.requestSubmit();
+}
+
+function assignMediaUploadFile(file) {
+	if (!(file instanceof File) || !(mediaUploadInput instanceof HTMLInputElement)) {
+		return;
+	}
+
+	const dataTransfer = new DataTransfer();
+	dataTransfer.items.add(file);
+	mediaUploadInput.files = dataTransfer.files;
+	updateMediaUploadFilename(file);
+	submitMediaUploadForm();
+}
 
 function setStatusMessage(target, message, mode = "") {
 	if (!(target instanceof HTMLElement)) {
@@ -206,6 +252,56 @@ categorySelect?.addEventListener("change", syncNewCategoryInputVisibility);
 syncNewCategoryInputVisibility();
 statusSelect?.addEventListener("change", syncScheduleFieldVisibility);
 syncScheduleFieldVisibility();
+
+mediaUploadInput?.addEventListener("change", () => {
+	if (!(mediaUploadInput instanceof HTMLInputElement)) {
+		return;
+	}
+
+	const file = mediaUploadInput.files?.[0];
+	updateMediaUploadFilename(file ?? null);
+	if (file instanceof File) {
+		submitMediaUploadForm();
+	}
+});
+
+mediaUploadDropzone?.addEventListener("keydown", (event) => {
+	if (event.key !== "Enter" && event.key !== " ") {
+		return;
+	}
+
+	event.preventDefault();
+	if (mediaUploadInput instanceof HTMLInputElement) {
+		mediaUploadInput.click();
+	}
+});
+
+mediaUploadDropzone?.addEventListener("dragover", (event) => {
+	event.preventDefault();
+	if (mediaUploadDropzone instanceof HTMLElement) {
+		mediaUploadDropzone.classList.add("is-dragover");
+	}
+});
+
+mediaUploadDropzone?.addEventListener("dragleave", () => {
+	if (mediaUploadDropzone instanceof HTMLElement) {
+		mediaUploadDropzone.classList.remove("is-dragover");
+	}
+});
+
+mediaUploadDropzone?.addEventListener("drop", (event) => {
+	event.preventDefault();
+	if (mediaUploadDropzone instanceof HTMLElement) {
+		mediaUploadDropzone.classList.remove("is-dragover");
+	}
+
+	const file = event.dataTransfer?.files?.[0];
+	if (!(file instanceof File)) {
+		return;
+	}
+
+	assignMediaUploadFile(file);
+});
 
 for (const uploader of document.querySelectorAll("[data-cover-uploader='true']")) {
 	if (!(uploader instanceof HTMLElement)) {
