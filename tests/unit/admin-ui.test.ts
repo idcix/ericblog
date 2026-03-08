@@ -91,11 +91,17 @@ describe("后台界面风格保护", () => {
 
 		assert.match(editorSource, /data-markdown-preview="true"/u);
 		assert.match(editorSource, /markdown-editor-shell/u);
+		assert.match(editorSource, /data-editor-draft-scope=/u);
+		assert.match(editorSource, /data-draft-status="true"/u);
+		assert.match(editorSource, /data-draft-restore="true"/u);
 		assert.match(adminScriptSource, /\[data-markdown-preview='true'\]/u);
 		assert.match(adminScriptSource, /renderMarkdownPreview/u);
 		assert.match(adminScriptSource, /extractPreviewSpoilerShortcodes/u);
+		assert.match(adminScriptSource, /EDITOR_DRAFT_STORAGE_PREFIX/u);
+		assert.match(adminScriptSource, /initEditorDraft/u);
 		assert.match(layoutSource, /markdown-preview-body/u);
 		assert.match(layoutSource, /markdown-preview-spoiler/u);
+		assert.match(layoutSource, /draft-toolbar/u);
 	});
 
 	test("文章列表提供取消定时和历史分类标签删除入口", async () => {

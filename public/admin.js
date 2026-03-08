@@ -11,6 +11,10 @@ const publishAtInput = document.querySelector("[data-publish-at-input='true']");
 const contentTextarea = document.getElementById("content");
 const contentUploadStatus = document.querySelector("[data-content-upload-status]");
 const markdownPreview = document.querySelector("[data-markdown-preview='true']");
+const draftToolbar = document.querySelector("[data-draft-toolbar='true']");
+const draftStatus = document.querySelector("[data-draft-status='true']");
+const draftRestoreButton = document.querySelector("[data-draft-restore='true']");
+const draftClearButton = document.querySelector("[data-draft-clear='true']");
 const editorForm = document.querySelector("form[data-editor-upload-url]");
 const editorUploadUrl =
 	editorForm instanceof HTMLFormElement
@@ -20,6 +24,10 @@ const editorCsrfToken =
 	editorForm instanceof HTMLFormElement
 		? (editorForm.dataset.editorCsrfToken ?? "")
 		: "";
+const editorDraftScope =
+	editorForm instanceof HTMLFormElement
+		? (editorForm.dataset.editorDraftScope ?? "")
+		: "";
 const mediaUploadForm = document.querySelector("[data-media-upload-form='true']");
 const mediaUploadInput = document.querySelector("[data-media-upload-input='true']");
 const mediaUploadDropzone = document.querySelector(
@@ -28,6 +36,10 @@ const mediaUploadDropzone = document.querySelector(
 const mediaUploadFilename = document.querySelector(
 	"[data-media-upload-filename='true']",
 );
+
+const EDITOR_DRAFT_STORAGE_PREFIX = "cf-astro-blog:editor-draft";
+const EDITOR_DRAFT_SCHEMA_VERSION = 1;
+const EDITOR_DRAFT_SAVE_DEBOUNCE_MS = 600;
 
 function updateMediaUploadFilename(file) {
 	if (!(mediaUploadFilename instanceof HTMLElement)) {
@@ -592,6 +604,414 @@ function updateTagIds() {
 	tagIdsInput.value = checkedValues.join(",");
 }
 
+let editorDraftSaveTimer = 0;
+let editorDraftState = null;
+let isApplyingEditorDraft = false;
+
+function canUseEditorDraftStorage() {
+	try {
+		const probeKey = "__editor_draft_probe__";
+		window.localStorage.setItem(probeKey, "1");
+		window.localStorage.removeItem(probeKey);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+const editorDraftStorageAvailable = canUseEditorDraftStorage();
+
+function getEditorDraftStorageKey() {
+	if (!editorDraftScope) {
+		return "";
+	}
+
+	return `${EDITOR_DRAFT_STORAGE_PREFIX}:${editorDraftScope}`;
+}
+
+function getEditorFieldValue(id) {
+	const element = document.getElementById(id);
+	if (
+		element instanceof HTMLInputElement ||
+		element instanceof HTMLTextAreaElement ||
+		element instanceof HTMLSelectElement
+	) {
+		return element.value;
+	}
+
+	return "";
+}
+
+function collectEditorDraftValues() {
+	return {
+		title: getEditorFieldValue("title"),
+		slug: getEditorFieldValue("slug"),
+		excerpt: getEditorFieldValue("excerpt"),
+		content: getEditorFieldValue("content"),
+		status: getEditorFieldValue("status") || "draft",
+		publishAt: getEditorFieldValue("publishAt"),
+		categoryId: getEditorFieldValue("categoryId"),
+		newCategoryName: getEditorFieldValue("newCategoryName"),
+		featuredImageKey: getEditorFieldValue("featuredImageKey"),
+		featuredImageAlt: getEditorFieldValue("featuredImageAlt"),
+		metaTitle: getEditorFieldValue("metaTitle"),
+		metaDescription: getEditorFieldValue("metaDescription"),
+		metaKeywords: getEditorFieldValue("metaKeywords"),
+		canonicalUrl: getEditorFieldValue("canonicalUrl"),
+		tagIds: getEditorFieldValue("tagIds"),
+		newTagNames: getEditorFieldValue("newTagNames"),
+	};
+}
+
+function serializeEditorDraftValues(values) {
+	try {
+		return JSON.stringify(values);
+	} catch {
+		return "";
+	}
+}
+
+function isEditorDraftPristine(values) {
+	return (
+		!values.title.trim() &&
+		!values.slug.trim() &&
+		!values.excerpt.trim() &&
+		!values.content.trim() &&
+		(values.status || "draft") === "draft" &&
+		!values.publishAt.trim() &&
+		!values.categoryId.trim() &&
+		!values.newCategoryName.trim() &&
+		!values.featuredImageKey.trim() &&
+		!values.featuredImageAlt.trim() &&
+		!values.metaTitle.trim() &&
+		!values.metaDescription.trim() &&
+		!values.metaKeywords.trim() &&
+		!values.canonicalUrl.trim() &&
+		!values.tagIds.trim() &&
+		!values.newTagNames.trim()
+	);
+}
+
+function normalizeEditorDraftValues(raw) {
+	const normalized = {
+		title: String(raw?.title ?? ""),
+		slug: String(raw?.slug ?? ""),
+		excerpt: String(raw?.excerpt ?? ""),
+		content: String(raw?.content ?? ""),
+		status: String(raw?.status ?? "draft"),
+		publishAt: String(raw?.publishAt ?? ""),
+		categoryId: String(raw?.categoryId ?? ""),
+		newCategoryName: String(raw?.newCategoryName ?? ""),
+		featuredImageKey: String(raw?.featuredImageKey ?? ""),
+		featuredImageAlt: String(raw?.featuredImageAlt ?? ""),
+		metaTitle: String(raw?.metaTitle ?? ""),
+		metaDescription: String(raw?.metaDescription ?? ""),
+		metaKeywords: String(raw?.metaKeywords ?? ""),
+		canonicalUrl: String(raw?.canonicalUrl ?? ""),
+		tagIds: String(raw?.tagIds ?? ""),
+		newTagNames: String(raw?.newTagNames ?? ""),
+	};
+
+	if (!["draft", "published", "scheduled"].includes(normalized.status)) {
+		normalized.status = "draft";
+	}
+
+	return normalized;
+}
+
+function formatDraftSavedAt(isoString) {
+	if (!isoString) {
+		return "未知时间";
+	}
+
+	const date = new Date(isoString);
+	if (Number.isNaN(date.getTime())) {
+		return "未知时间";
+	}
+
+	return date.toLocaleString("zh-CN", { hour12: false });
+}
+
+function setDraftUiStatus(message, mode = "") {
+	setStatusMessage(draftStatus, message, mode);
+}
+
+function syncDraftActionButtons({
+	showToolbar = true,
+	showRestore = false,
+	showClear = false,
+} = {}) {
+	if (draftToolbar instanceof HTMLElement) {
+		draftToolbar.hidden = !showToolbar;
+	}
+
+	if (draftRestoreButton instanceof HTMLButtonElement) {
+		draftRestoreButton.hidden = !showRestore;
+	}
+
+	if (draftClearButton instanceof HTMLButtonElement) {
+		draftClearButton.hidden = !showClear;
+	}
+}
+
+function readEditorDraftFromStorage() {
+	const storageKey = getEditorDraftStorageKey();
+	if (!storageKey || !editorDraftStorageAvailable) {
+		return null;
+	}
+
+	try {
+		const raw = window.localStorage.getItem(storageKey);
+		if (!raw) {
+			return null;
+		}
+
+		const parsed = JSON.parse(raw);
+		if (!parsed || typeof parsed !== "object") {
+			return null;
+		}
+
+		const values = normalizeEditorDraftValues(parsed.values);
+		const savedAt = String(parsed.savedAt ?? "");
+		return {
+			version: Number(parsed.version ?? 0),
+			savedAt,
+			values,
+		};
+	} catch {
+		return null;
+	}
+}
+
+function writeEditorDraftToStorage(values) {
+	const storageKey = getEditorDraftStorageKey();
+	if (!storageKey || !editorDraftStorageAvailable) {
+		return false;
+	}
+
+	try {
+		const payload = {
+			version: EDITOR_DRAFT_SCHEMA_VERSION,
+			savedAt: new Date().toISOString(),
+			values,
+		};
+		window.localStorage.setItem(storageKey, JSON.stringify(payload));
+		editorDraftState = payload;
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function clearEditorDraftStorage() {
+	const storageKey = getEditorDraftStorageKey();
+	if (!storageKey || !editorDraftStorageAvailable) {
+		return;
+	}
+
+	try {
+		window.localStorage.removeItem(storageKey);
+	} catch {
+		// 忽略本地存储异常，避免影响编辑流程
+	}
+}
+
+function syncEditorCoverPreviewFromKey() {
+	const keyInput = document.querySelector("[data-cover-key-input='true']");
+	const dropzone = document.querySelector("[data-cover-dropzone='true']");
+	const altInput = document.getElementById("featuredImageAlt");
+
+	if (!(keyInput instanceof HTMLInputElement) || !(dropzone instanceof HTMLElement)) {
+		return;
+	}
+
+	const key = keyInput.value.trim();
+	if (!key) {
+		dropzone.innerHTML =
+			'<div class="cover-empty" data-cover-empty="true">拖拽图片或点击上传</div>';
+		return;
+	}
+
+	const altText =
+		altInput instanceof HTMLInputElement && altInput.value.trim()
+			? altInput.value.trim()
+			: "封面预览";
+	let image = dropzone.querySelector("[data-cover-preview-image='true']");
+	if (!(image instanceof HTMLImageElement)) {
+		image = document.createElement("img");
+		image.className = "cover-preview-image";
+		image.setAttribute("data-cover-preview-image", "true");
+		dropzone.innerHTML = "";
+		dropzone.appendChild(image);
+	}
+
+	image.src = `/media/${key}`;
+	image.alt = altText;
+}
+
+function applyEditorDraftValues(values) {
+	const normalized = normalizeEditorDraftValues(values);
+	isApplyingEditorDraft = true;
+
+	for (const [key, value] of Object.entries(normalized)) {
+		const element = document.getElementById(key);
+		if (
+			element instanceof HTMLInputElement ||
+			element instanceof HTMLTextAreaElement ||
+			element instanceof HTMLSelectElement
+		) {
+			element.value = value;
+		}
+	}
+
+	const selectedTagIds = new Set(
+		normalized.tagIds
+			.split(",")
+			.map((value) => value.trim())
+			.filter(Boolean),
+	);
+
+	for (const checkbox of document.querySelectorAll("input[data-tag-checkbox='true']")) {
+		if (!(checkbox instanceof HTMLInputElement)) {
+			continue;
+		}
+		checkbox.checked = selectedTagIds.has(checkbox.value);
+	}
+
+	if (slugInput instanceof HTMLInputElement) {
+		slugInput.dataset.manual = normalized.slug ? "true" : "false";
+	}
+
+	updateTagIds();
+	syncNewCategoryInputVisibility();
+	syncScheduleFieldVisibility();
+	updateSlugPreview();
+	syncEditorCoverPreviewFromKey();
+	syncMarkdownPreview();
+	isApplyingEditorDraft = false;
+}
+
+function saveEditorDraftNow() {
+	if (!(editorForm instanceof HTMLFormElement) || isApplyingEditorDraft) {
+		return;
+	}
+
+	const currentValues = collectEditorDraftValues();
+	if (isEditorDraftPristine(currentValues)) {
+		clearEditorDraftStorage();
+		editorDraftState = null;
+		syncDraftActionButtons({
+			showToolbar: false,
+			showRestore: false,
+			showClear: false,
+		});
+		return;
+	}
+
+	const previousSerialized = editorDraftState
+		? serializeEditorDraftValues(editorDraftState.values)
+		: "";
+	const nextSerialized = serializeEditorDraftValues(currentValues);
+	if (previousSerialized && previousSerialized === nextSerialized) {
+		return;
+	}
+
+	const saved = writeEditorDraftToStorage(currentValues);
+	if (!saved || !editorDraftState) {
+		setDraftUiStatus("本地草稿保存失败，请检查浏览器存储权限", "error");
+		return;
+	}
+
+	setDraftUiStatus(
+		`本地草稿已保存（${formatDraftSavedAt(editorDraftState.savedAt)}）`,
+		"success",
+	);
+	syncDraftActionButtons({
+		showToolbar: true,
+		showRestore: false,
+		showClear: true,
+	});
+}
+
+function scheduleEditorDraftSave() {
+	if (!(editorForm instanceof HTMLFormElement) || isApplyingEditorDraft) {
+		return;
+	}
+
+	if (editorDraftSaveTimer) {
+		window.clearTimeout(editorDraftSaveTimer);
+	}
+
+	editorDraftSaveTimer = window.setTimeout(() => {
+		editorDraftSaveTimer = 0;
+		saveEditorDraftNow();
+	}, EDITOR_DRAFT_SAVE_DEBOUNCE_MS);
+}
+
+function initEditorDraft() {
+	if (!(editorForm instanceof HTMLFormElement)) {
+		return;
+	}
+
+	if (!editorDraftStorageAvailable) {
+		syncDraftActionButtons({
+			showToolbar: true,
+			showRestore: false,
+			showClear: false,
+		});
+		setDraftUiStatus("当前浏览器不支持本地草稿存储");
+		return;
+	}
+
+	const draft = readEditorDraftFromStorage();
+	const currentValues = collectEditorDraftValues();
+
+	if (!draft || !draft.values) {
+		syncDraftActionButtons({
+			showToolbar: false,
+			showRestore: false,
+			showClear: false,
+		});
+		return;
+	}
+
+	const currentSerialized = serializeEditorDraftValues(currentValues);
+	const draftSerialized = serializeEditorDraftValues(draft.values);
+	const savedAtText = formatDraftSavedAt(draft.savedAt);
+	const shouldAutoRestore =
+		isEditorDraftPristine(currentValues) && !isEditorDraftPristine(draft.values);
+
+	editorDraftState = draft;
+
+	if (currentSerialized === draftSerialized) {
+		syncDraftActionButtons({
+			showToolbar: true,
+			showRestore: false,
+			showClear: true,
+		});
+		setDraftUiStatus(`本地草稿已同步（${savedAtText}）`);
+		return;
+	}
+
+	if (shouldAutoRestore) {
+		applyEditorDraftValues(draft.values);
+		setDraftUiStatus(`已自动恢复本地草稿（${savedAtText}）`, "success");
+		syncDraftActionButtons({
+			showToolbar: true,
+			showRestore: false,
+			showClear: true,
+		});
+		return;
+	}
+
+	setDraftUiStatus(`发现本地草稿（${savedAtText}），可选择恢复或清除`);
+	syncDraftActionButtons({
+		showToolbar: true,
+		showRestore: true,
+		showClear: true,
+	});
+}
+
 titleInput?.addEventListener("input", updateSlugFromTitle);
 
 slugInput?.addEventListener("input", () => {
@@ -614,6 +1034,47 @@ categorySelect?.addEventListener("change", syncNewCategoryInputVisibility);
 syncNewCategoryInputVisibility();
 statusSelect?.addEventListener("change", syncScheduleFieldVisibility);
 syncScheduleFieldVisibility();
+
+draftRestoreButton?.addEventListener("click", () => {
+	if (!editorDraftState?.values) {
+		return;
+	}
+
+	applyEditorDraftValues(editorDraftState.values);
+	setDraftUiStatus(
+		`已恢复本地草稿（${formatDraftSavedAt(editorDraftState.savedAt)}）`,
+		"success",
+	);
+	syncDraftActionButtons({
+		showToolbar: true,
+		showRestore: false,
+		showClear: true,
+	});
+	scheduleEditorDraftSave();
+});
+
+draftClearButton?.addEventListener("click", () => {
+	clearEditorDraftStorage();
+	editorDraftState = null;
+	setDraftUiStatus("本地草稿已清除", "success");
+	syncDraftActionButtons({
+		showToolbar: false,
+		showRestore: false,
+		showClear: false,
+	});
+});
+
+editorForm?.addEventListener("input", scheduleEditorDraftSave);
+editorForm?.addEventListener("change", scheduleEditorDraftSave);
+editorForm?.addEventListener("submit", () => {
+	if (editorDraftSaveTimer) {
+		window.clearTimeout(editorDraftSaveTimer);
+		editorDraftSaveTimer = 0;
+	}
+	clearEditorDraftStorage();
+	editorDraftState = null;
+});
+initEditorDraft();
 
 mediaUploadInput?.addEventListener("change", () => {
 	if (!(mediaUploadInput instanceof HTMLInputElement)) {

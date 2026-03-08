@@ -599,6 +599,18 @@ export const adminSharedStyles = `
 			color: var(--success);
 		}
 
+		.draft-toolbar {
+			margin-top: 0.46rem;
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: 0.48rem 0.6rem;
+		}
+
+		.draft-toolbar .form-help {
+			margin-top: 0;
+		}
+
 		.markdown-editor-shell {
 			display: grid;
 			grid-template-columns: minmax(0, 1.08fr) minmax(280px, 1fr);

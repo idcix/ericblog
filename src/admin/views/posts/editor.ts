@@ -66,6 +66,7 @@ export function postEditorPage(data: EditorData): string {
 			action="${escapeAttribute(formAction)}"
 			data-editor-upload-url="/api/admin/media/upload-async"
 			data-editor-csrf-token="${escapeAttribute(csrfToken)}"
+			data-editor-draft-scope="${escapeAttribute(formAction)}"
 		>
 			<input type="hidden" name="_csrf" value="${escapeAttribute(csrfToken)}" />
 			<div class="editor-grid">
@@ -106,6 +107,11 @@ export function postEditorPage(data: EditorData): string {
 							</section>
 						</div>
 						<p class="form-help">输入内容后会在右侧实时预览，单换行也会保留显示。</p>
+						<div class="draft-toolbar" data-draft-toolbar="true" hidden>
+							<button type="button" class="btn btn-sm" data-draft-restore="true" hidden>恢复本地草稿</button>
+							<button type="button" class="btn btn-sm btn-danger" data-draft-clear="true" hidden>清除本地草稿</button>
+							<span class="form-help" data-draft-status="true"></span>
+						</div>
 						<p class="form-help" data-content-upload-status></p>
 					</div>
 				</div>
