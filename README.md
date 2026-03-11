@@ -149,8 +149,11 @@ npm run hash:password -- 你的密码
   - 会自动发送 `Authorization: Bearer <AUTO_DEPLOY_WEBHOOK_SECRET>`；
   - 请求体会自动包装为 `{ event_type, client_payload }`；
   - `event_type` 默认 `rebuild-search-index`，可通过 `AUTO_DEPLOY_GITHUB_EVENT_TYPE` 覆盖。
-- 配套的 GitHub Actions 工作流见 `.github/workflows/auto-deploy-from-admin.yml`，它会读取仓库 Secret `CLOUDFLARE_REFRESH_TOKEN`，动态换取 Access Token 后执行 `npm run deploy`。
-- 由于 Cloudflare Refresh Token 可能轮换，工作流会把新的 refresh token 回写到 `CLOUDFLARE_REFRESH_TOKEN`。为此需要额外配置仓库 Secret `GH_ADMIN_TOKEN`（需有仓库 secrets 写权限）。
+- 配套的 GitHub Actions 工作流见 `.github/workflows/auto-deploy-from-admin.yml`，执行顺序如下：
+  - 优先使用仓库 Secret `CLOUDFLARE_API_TOKEN`（推荐，最稳定）；
+  - 若未配置 `CLOUDFLARE_API_TOKEN`，则尝试使用 `CLOUDFLARE_REFRESH_TOKEN` 动态换取 Access Token；
+  - 若换取成功且返回新的 refresh token，会自动回写 `CLOUDFLARE_REFRESH_TOKEN`（需要额外配置 `GH_ADMIN_TOKEN`，且具备仓库 secrets 写权限）。
+- 当 Cloudflare 凭据缺失或 refresh token 失效时，工作流会记录“已跳过部署”的原因，不再直接失败。
 
 ## 部署前检查
 

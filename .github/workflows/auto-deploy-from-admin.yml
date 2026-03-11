@@ -4,6 +4,7 @@ on:
   repository_dispatch:
     types:
       - rebuild-search-index
+  workflow_dispatch:
 
 concurrency:
   group: auto-deploy-from-admin
@@ -11,7 +12,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.event.client_payload.source == 'admin-posts' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.client_payload.source == 'admin-posts' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -27,20 +28,36 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
-      - name: 刷新 Cloudflare Access Token
+      - name: 准备 Cloudflare Access Token
         id: cf_token
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_REFRESH_TOKEN: ${{ secrets.CLOUDFLARE_REFRESH_TOKEN }}
         run: |
-          if [ -z "$CLOUDFLARE_REFRESH_TOKEN" ]; then
-            echo "缺少 GitHub Secret: CLOUDFLARE_REFRESH_TOKEN"
-            exit 1
+          if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::add-mask::$CLOUDFLARE_API_TOKEN"
+            echo "token=$CLOUDFLARE_API_TOKEN" >> "$GITHUB_OUTPUT"
+            echo "auth_mode=api_token" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
-          RESPONSE=$(curl -sS -X POST "https://dash.cloudflare.com/oauth2/token" \
+          if [ -z "$CLOUDFLARE_REFRESH_TOKEN" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=缺少可用凭据：请配置 CLOUDFLARE_API_TOKEN 或 CLOUDFLARE_REFRESH_TOKEN" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          RESPONSE=$(curl -sS -X POST "https://dash.cloudflare.com/oauth2/token" --fail-with-body \
             --data-urlencode "grant_type=refresh_token" \
             --data-urlencode "refresh_token=${CLOUDFLARE_REFRESH_TOKEN}" \
-            --data-urlencode "client_id=54d11594-84e4-41aa-b438-e81b8fa78ee7")
+            --data-urlencode "client_id=54d11594-84e4-41aa-b438-e81b8fa78ee7" 2>/dev/null || true)
+
+          if ! echo "$RESPONSE" | node -e 'const data = JSON.parse(process.argv[1]); if (!data.access_token) process.exit(1);' "$RESPONSE"; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=刷新令牌不可用，请重新登录 wrangler 后更新 GitHub Secret" >> "$GITHUB_OUTPUT"
+            echo "refresh_error=$RESPONSE" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           TOKEN_JSON=$(node -e 'const data = JSON.parse(process.argv[1]); if (!data.access_token) { console.error(JSON.stringify(data)); process.exit(1); } process.stdout.write(JSON.stringify({ accessToken: data.access_token, refreshToken: data.refresh_token || "" }));' "$RESPONSE")
           ACCESS_TOKEN=$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.accessToken);' "$TOKEN_JSON")
@@ -48,13 +65,14 @@ jobs:
 
           echo "::add-mask::$ACCESS_TOKEN"
           echo "token=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
+          echo "auth_mode=refresh_token" >> "$GITHUB_OUTPUT"
           if [ -n "$NEXT_REFRESH_TOKEN" ]; then
             echo "::add-mask::$NEXT_REFRESH_TOKEN"
             echo "refresh_token=$NEXT_REFRESH_TOKEN" >> "$GITHUB_OUTPUT"
           fi
 
       - name: 回写 Cloudflare Refresh Token
-        if: ${{ steps.cf_token.outputs.refresh_token != '' }}
+        if: ${{ steps.cf_token.outputs.auth_mode == 'refresh_token' && steps.cf_token.outputs.refresh_token != '' }}
         env:
           GH_TOKEN: ${{ secrets.GH_ADMIN_TOKEN }}
           NEXT_REFRESH_TOKEN: ${{ steps.cf_token.outputs.refresh_token }}
@@ -66,6 +84,15 @@ jobs:
           gh secret set CLOUDFLARE_REFRESH_TOKEN --repo "${{ github.repository }}" --body "$NEXT_REFRESH_TOKEN"
 
       - name: 执行部署
+        if: ${{ steps.cf_token.outputs.skip != 'true' }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ steps.cf_token.outputs.token }}
         run: npm run deploy
+
+      - name: 输出跳过原因
+        if: ${{ steps.cf_token.outputs.skip == 'true' }}
+        run: |
+          echo "本次自动部署已跳过：${{ steps.cf_token.outputs.skip_reason }}"
+          if [ -n "${{ steps.cf_token.outputs.refresh_error }}" ]; then
+            echo "Cloudflare 返回：${{ steps.cf_token.outputs.refresh_error }}"
+          fi
