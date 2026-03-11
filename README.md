@@ -149,6 +149,7 @@ npm run hash:password -- 你的密码
   - 会自动发送 `Authorization: Bearer <AUTO_DEPLOY_WEBHOOK_SECRET>`；
   - 请求体会自动包装为 `{ event_type, client_payload }`；
   - `event_type` 默认 `rebuild-search-index`，可通过 `AUTO_DEPLOY_GITHUB_EVENT_TYPE` 覆盖。
+- 配套的 GitHub Actions 工作流见 `.github/workflows/auto-deploy-from-admin.yml`，它会读取仓库 Secret `CLOUDFLARE_REFRESH_TOKEN`，动态换取 Access Token 后执行 `npm run deploy`。
 
 ## 部署前检查
 
