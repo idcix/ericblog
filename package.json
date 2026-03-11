@@ -6,7 +6,7 @@
 	"description": "基于 Astro、Hono 与 Cloudflare Workers 的内置后台站点模板",
 	"scripts": {
 		"dev": "astro dev",
-		"build": "npm run search:index:local && astro build",
+		"build": "npm run search:index:auto && astro build",
 		"preview": "npm run build && wrangler dev",
 		"deploy": "npm run db:migrate:remote && npm run search:index:remote && astro build && wrangler deploy",
 		"check": "astro check && biome check src public tests scripts",
@@ -14,6 +14,7 @@
 		"format": "biome format --write src public tests scripts README.md",
 		"lint": "biome lint src public tests scripts",
 		"test": "tsx --test tests/integration/*.test.ts tests/unit/*.test.ts",
+		"search:index:auto": "node scripts/build-pagefind-index.mjs",
 		"search:index:local": "node scripts/build-pagefind-index.mjs --local",
 		"search:index:remote": "node scripts/build-pagefind-index.mjs --remote",
 		"hash:password": "node scripts/hash-password.mjs",

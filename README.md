@@ -111,6 +111,7 @@ npm run hash:password -- 你的密码
 | `npm run dev` | 启动本地开发服务器 |
 | `npm run build` | 生成生产构建 |
 | `npm run preview` | 构建后用 Wrangler 本地预览 |
+| `npm run search:index:auto` | 优先读取本地 D1，若为空自动回退远端 D1 |
 | `npm run search:index:local` | 读取本地 D1 并生成 Pagefind 索引 |
 | `npm run search:index:remote` | 读取远端 D1 并生成 Pagefind 索引 |
 | `npm run check` | 运行类型检查和 Biome 检查 |
@@ -133,7 +134,8 @@ npm run hash:password -- 你的密码
 - 索引生成脚本为 `scripts/build-pagefind-index.mjs`，会从 D1 拉取公开文章并输出：
   - `public/pagefind/`（Pagefind 索引文件）
   - `public/pagefind-meta.json`（分类、标签与文章元数据）
-- `npm run build` 会默认先执行本地索引构建；`npm run deploy` 会在发布前执行远端索引构建。
+- `npm run build` 会默认先执行 `search:index:auto`（本地为空时自动回退远端），避免误发布空索引。
+- `npm run deploy` 会在发布前执行远端索引构建，保证线上搜索与远端 D1 一致。
 
 ## 部署前检查
 

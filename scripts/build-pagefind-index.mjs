@@ -8,8 +8,13 @@ const SOURCE_DIR = join(ROOT_DIR, ".pagefind-source");
 const OUTPUT_DIR = join(ROOT_DIR, "public", "pagefind");
 const META_FILE = join(ROOT_DIR, "public", "pagefind-meta.json");
 
-const isRemote = process.argv.includes("--remote");
-const modeFlag = isRemote ? "--remote" : "--local";
+const forceRemote = process.argv.includes("--remote");
+const forceLocal = process.argv.includes("--local");
+if (forceRemote && forceLocal) {
+	throw new Error("不能同时指定 --local 与 --remote。");
+}
+
+const requestedMode = forceRemote ? "remote" : forceLocal ? "local" : "auto";
 
 const POSTS_QUERY = `
 SELECT
@@ -91,7 +96,8 @@ function toIsoDate(value) {
 	return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
 }
 
-function runWranglerQuery(command) {
+function runWranglerQuery(command, sourceMode) {
+	const modeFlag = sourceMode === "remote" ? "--remote" : "--local";
 	const stdout = execFileSync(
 		"npx",
 		[
@@ -119,6 +125,54 @@ function runWranglerQuery(command) {
 	const parsed = JSON.parse(stdout.slice(jsonStart, jsonEnd + 1));
 	const rows = Array.isArray(parsed) ? parsed[0]?.results : [];
 	return Array.isArray(rows) ? rows : [];
+}
+
+function readRowsForMode(sourceMode) {
+	return {
+		postsRows: runWranglerQuery(POSTS_QUERY, sourceMode),
+		tagsRows: runWranglerQuery(TAGS_QUERY, sourceMode),
+	};
+}
+
+function resolveSourceRows() {
+	const attempts =
+		requestedMode === "auto" ? ["local", "remote"] : [requestedMode];
+	let fallback = null;
+
+	for (let index = 0; index < attempts.length; index += 1) {
+		const mode = attempts[index];
+		const hasNext = index < attempts.length - 1;
+
+		try {
+			const rows = readRowsForMode(mode);
+
+			if (
+				requestedMode === "auto" &&
+				mode === "local" &&
+				rows.postsRows.length === 0 &&
+				hasNext
+			) {
+				console.warn("[Pagefind] 本地 D1 未读取到文章，自动回退远端 D1。");
+				fallback = { mode, ...rows };
+				continue;
+			}
+
+			return { mode, ...rows };
+		} catch (error) {
+			console.warn(`[Pagefind] 读取 ${mode} D1 失败。`);
+			console.warn(error instanceof Error ? error.message : String(error));
+		}
+	}
+
+	if (fallback) {
+		return fallback;
+	}
+
+	return {
+		mode: requestedMode === "remote" ? "remote" : "local",
+		postsRows: [],
+		tagsRows: [],
+	};
 }
 
 async function ensureDirectory(pathname) {
@@ -207,7 +261,7 @@ async function runPagefind() {
 	);
 }
 
-function buildMetaPayload(posts) {
+function buildMetaPayload(posts, sourceMode) {
 	const categoriesMap = new Map();
 	const tagsMap = new Map();
 
@@ -226,7 +280,7 @@ function buildMetaPayload(posts) {
 
 	return {
 		generatedAt: new Date().toISOString(),
-		mode: isRemote ? "remote" : "local",
+		mode: sourceMode,
 		posts: posts.map((post) => ({
 			slug: post.slug,
 			url: `/blog/${post.slug}`,
@@ -317,29 +371,24 @@ async function writeMetaFile(payload) {
 }
 
 async function main() {
-	console.log(`[Pagefind] 开始生成索引（模式：${isRemote ? "remote" : "local"}）`);
+	console.log(`[Pagefind] 开始生成索引（请求模式：${requestedMode}）`);
 
-	let postsRows = [];
-	let tagsRows = [];
-	try {
-		postsRows = runWranglerQuery(POSTS_QUERY);
-		tagsRows = runWranglerQuery(TAGS_QUERY);
-	} catch (error) {
-		console.warn("[Pagefind] 读取 D1 数据失败，将生成空索引。");
-		console.warn(error instanceof Error ? error.message : String(error));
-	}
+	const { mode: sourceMode, postsRows, tagsRows } = resolveSourceRows();
+	console.log(
+		`[Pagefind] 使用 ${sourceMode} D1 数据源，读取到 ${postsRows.length} 篇文章。`,
+	);
 
 	const posts = buildPosts(postsRows, tagsRows);
 	await buildSourceFiles(posts);
 	await runPagefind();
 
-	const payload = buildMetaPayload(posts);
+	const payload = buildMetaPayload(posts, sourceMode);
 	await writeMetaFile(payload);
 
 	await rm(SOURCE_DIR, { recursive: true, force: true });
 
 	console.log(
-		`[Pagefind] 索引生成完成，文章 ${payload.posts.length} 篇，分类 ${payload.categories.length} 个，标签 ${payload.tags.length} 个。`,
+		`[Pagefind] 索引生成完成（数据源：${sourceMode}），文章 ${payload.posts.length} 篇，分类 ${payload.categories.length} 个，标签 ${payload.tags.length} 个。`,
 	);
 }
 

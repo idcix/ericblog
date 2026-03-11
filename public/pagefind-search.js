@@ -238,6 +238,13 @@ async function initPagefindSearch() {
 	}
 
 	const context = { metaData, resultsEl, summaryEl };
+	if (metaData.posts.length === 0) {
+		resultsEl.innerHTML =
+			'<div class="empty-state glass-panel"><p>当前暂无可搜索文章；如果你确认已发布内容，请先重建远端搜索索引后再部署。</p></div>';
+		updateSummary(summaryEl, "搜索索引为空");
+		return;
+	}
+
 	await performSearch(context, readSearchState(form));
 
 	form.addEventListener("submit", async (event) => {
