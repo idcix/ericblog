@@ -104,6 +104,27 @@ function applyFilters(posts, state) {
 	});
 }
 
+function fallbackKeywordSearch(posts, query) {
+	const keyword = String(query ?? "").trim().toLowerCase();
+	if (!keyword) {
+		return posts;
+	}
+
+	return posts.filter((post) => {
+		const tagNames = Array.isArray(post.tagNames) ? post.tagNames : [];
+		const haystack = [
+			post.title,
+			post.excerpt,
+			post.authorName,
+			post.categoryName,
+			...tagNames,
+		]
+			.map((item) => String(item ?? "").toLowerCase())
+			.join(" ");
+		return haystack.includes(keyword);
+	});
+}
+
 async function loadPagefindModule() {
 	const imported = await import("/pagefind/pagefind.js");
 	return imported?.default ?? imported;
@@ -140,6 +161,7 @@ async function withTimeout(promise, ms, message) {
 async function performSearch(context, state, options = {}) {
 	const { metaData, resultsEl, summaryEl } = context;
 	const hasCriteria = Boolean(state.query || state.category || state.tags.length > 0);
+	let usingFallbackSearch = false;
 
 	if (!hasCriteria) {
 		resultsEl.innerHTML = "";
@@ -152,7 +174,11 @@ async function performSearch(context, state, options = {}) {
 
 	if (state.query) {
 		try {
-			const pagefind = await loadPagefindModule();
+			const pagefind = await withTimeout(
+				loadPagefindModule(),
+				8000,
+				"Pagefind 模块加载超时",
+			);
 			const searchResponse = await withTimeout(
 				pagefind.search(state.query),
 				10000,
@@ -177,9 +203,8 @@ async function performSearch(context, state, options = {}) {
 				.sort((a, b) => (rankMap.get(a.slug) ?? 99999) - (rankMap.get(b.slug) ?? 99999));
 		} catch (error) {
 			console.error("[Pagefind] 搜索失败", error);
-			resultsEl.innerHTML = '<div class="empty-state glass-panel"><p>搜索索引尚未就绪，请稍后再试。</p></div>';
-			updateSummary(summaryEl, "搜索索引暂不可用");
-			return;
+			usingFallbackSearch = true;
+			filteredPosts = rankPosts(fallbackKeywordSearch(filteredPosts, state.query));
 		}
 	} else {
 		filteredPosts = rankPosts(filteredPosts);
@@ -188,12 +213,22 @@ async function performSearch(context, state, options = {}) {
 	const limited = filteredPosts.slice(0, 20);
 	if (limited.length === 0) {
 		resultsEl.innerHTML = '<div class="empty-state glass-panel"><p>没有找到符合当前条件的内容。</p></div>';
-		updateSummary(summaryEl, "没有找到符合当前条件的内容");
+		updateSummary(
+			summaryEl,
+			usingFallbackSearch
+				? "Pagefind 暂不可用，已回退基础搜索，但未找到符合当前条件的内容"
+				: "没有找到符合当前条件的内容",
+		);
 		return;
 	}
 
 	resultsEl.innerHTML = limited.map((post) => createResultCard(post)).join("\n");
-	updateSummary(summaryEl, `共找到 ${limited.length} 条结果`);
+	updateSummary(
+		summaryEl,
+		usingFallbackSearch
+			? `共找到 ${limited.length} 条结果（基础搜索回退）`
+			: `共找到 ${limited.length} 条结果`,
+	);
 
 	if (options.updateUrl) {
 		updateAddressBar(state);
