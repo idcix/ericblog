@@ -192,7 +192,7 @@ const activeFilters = [
 		gap: 1rem;
 	}
 
-	.search-result-card {
+	:global(.search-result-card) {
 		display: grid;
 		gap: 0.75rem;
 		padding: clamp(0.75rem, 0.56rem + 0.75vw, 1.05rem);
@@ -206,7 +206,7 @@ const activeFilters = [
 			box-shadow var(--transition);
 	}
 
-	.search-result-card:hover {
+	:global(.search-result-card:hover) {
 		transform: translate3d(0, -4px, 0);
 		border-color: rgba(10, 132, 255, 0.26);
 		box-shadow:
@@ -214,18 +214,18 @@ const activeFilters = [
 			0 10px 20px -18px rgba(8, 18, 34, 0.28);
 	}
 
-	.search-result-card-inner {
+	:global(.search-result-card-inner) {
 		display: grid;
 		gap: 0.72rem;
 	}
 
-	.search-result-pill-row {
+	:global(.search-result-pill-row) {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.5rem;
 	}
 
-	.search-result-pill {
+	:global(.search-result-pill) {
 		display: inline-flex;
 		align-items: center;
 		height: 1.7rem;
@@ -238,12 +238,12 @@ const activeFilters = [
 		letter-spacing: 0.02em;
 	}
 
-	.search-result-link {
+	:global(.search-result-link) {
 		color: inherit;
 		text-decoration: none;
 	}
 
-	.search-result-title {
+	:global(.search-result-title) {
 		margin: 0;
 		font-size: clamp(1.2rem, 1.08rem + 0.46vw, 1.54rem);
 		line-height: 1.24;
@@ -252,11 +252,11 @@ const activeFilters = [
 		color: var(--color-text);
 	}
 
-	.search-result-link:hover .search-result-title {
+	:global(.search-result-link:hover .search-result-title) {
 		color: var(--color-accent-hover);
 	}
 
-	.search-result-excerpt {
+	:global(.search-result-excerpt) {
 		margin: 0;
 		color: var(--color-text-secondary);
 		font-size: 0.96rem;
@@ -264,7 +264,7 @@ const activeFilters = [
 		overflow-wrap: anywhere;
 	}
 
-	.search-result-meta {
+	:global(.search-result-meta) {
 		margin: 0;
 		display: flex;
 		flex-wrap: wrap;
@@ -274,14 +274,14 @@ const activeFilters = [
 		font-size: 0.86rem;
 	}
 
-	.search-result-readmore {
+	:global(.search-result-readmore) {
 		margin-left: auto;
 		color: var(--color-accent);
 		font-weight: 600;
 		text-decoration: none;
 	}
 
-	.search-result-readmore:hover {
+	:global(.search-result-readmore:hover) {
 		color: var(--color-accent-hover);
 	}
 
