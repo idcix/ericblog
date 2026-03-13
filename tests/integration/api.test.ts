@@ -187,6 +187,34 @@ describe("后台接口", () => {
 		);
 	});
 
+	test("GET /friend-links/avatar 会拒绝无效 URL", async () => {
+		const res = await app.request(
+			"/friend-links/avatar?url=bad-url",
+			undefined,
+			{
+				...mockEnv,
+				DB: createMockD1().db,
+			} as unknown as Env,
+		);
+
+		assert.equal(res.status, 400);
+		assert.match(await res.text(), /头像地址不合法/u);
+	});
+
+	test("GET /friend-links/avatar 会拒绝本地或内网地址", async () => {
+		const res = await app.request(
+			"/friend-links/avatar?url=http%3A%2F%2Flocalhost%2Favatar.png",
+			undefined,
+			{
+				...mockEnv,
+				DB: createMockD1().db,
+			} as unknown as Env,
+		);
+
+		assert.equal(res.status, 400);
+		assert.match(await res.text(), /本地或内网主机/u);
+	});
+
 	test("POST /ai/chat 会拒绝跨站来源请求", async () => {
 		const res = await app.request(
 			"/ai/chat",

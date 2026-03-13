@@ -9,9 +9,18 @@ let approvedLinks: Array<{
 	name: string;
 	siteUrl: string;
 	avatarUrl: string | null;
+	avatarProxyUrl?: string | null;
 	description: string;
 	contact: string;
 }> = [];
+
+function buildFriendAvatarProxyUrl(url: string | null): string | null {
+	if (!url) {
+		return null;
+	}
+
+	return `/api/friend-links/avatar?url=${encodeURIComponent(url)}`;
+}
 
 try {
 	const { env } = Astro.locals.runtime;
@@ -29,6 +38,10 @@ try {
 		.from(friendLinks)
 		.where(eq(friendLinks.status, "approved"))
 		.orderBy(asc(friendLinks.name));
+	approvedLinks = approvedLinks.map((item) => ({
+		...item,
+		avatarProxyUrl: buildFriendAvatarProxyUrl(item.avatarUrl),
+	}));
 } catch {
 	// D1 未绑定时回退为空列表
 }
@@ -54,7 +67,13 @@ try {
 						<div class="friend-link-meta">
 							<div class="friend-link-avatar" aria-hidden="true">
 								{item.avatarUrl ? (
-									<img src={item.avatarUrl} alt="" loading="lazy" decoding="async" />
+									<img
+										src={item.avatarProxyUrl || undefined}
+										alt=""
+										loading="lazy"
+										decoding="async"
+										referrerpolicy="no-referrer"
+									/>
 								) : (
 									<span>{item.name.slice(0, 1)}</span>
 								)}

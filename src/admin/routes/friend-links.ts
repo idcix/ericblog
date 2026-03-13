@@ -7,6 +7,9 @@ import { sanitizeCanonicalUrl, sanitizePlainText } from "@/lib/security";
 import type { AdminAppEnv } from "../middleware/auth";
 
 const friendLinksRoutes = new Hono<AdminAppEnv>();
+const AVATAR_PROXY_TIMEOUT_MS = 8_000;
+const AVATAR_PROXY_MAX_BYTES = 2 * 1024 * 1024;
+const AVATAR_PROXY_CACHE_SECONDS = 6 * 60 * 60;
 
 interface FriendLinkApplicationInput {
 	name: string;
@@ -20,6 +23,106 @@ interface FriendLinkApplicationInput {
 interface TurnstileVerifyResponse {
 	success?: boolean;
 	"error-codes"?: string[];
+}
+
+function isPrivateIpv4(hostname: string): boolean {
+	const parts = hostname.split(".").map((part) => Number(part));
+	if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part))) {
+		return false;
+	}
+
+	const [a, b] = parts;
+	if (a === 10 || a === 127 || a === 0) {
+		return true;
+	}
+
+	if (a === 169 && b === 254) {
+		return true;
+	}
+
+	if (a === 172 && b >= 16 && b <= 31) {
+		return true;
+	}
+
+	if (a === 192 && b === 168) {
+		return true;
+	}
+
+	if (a === 100 && b >= 64 && b <= 127) {
+		return true;
+	}
+
+	return a === 198 && (b === 18 || b === 19);
+}
+
+function normalizeHostname(hostname: string): string {
+	const normalized = hostname.trim().toLowerCase();
+	if (normalized.startsWith("[") && normalized.endsWith("]")) {
+		return normalized.slice(1, -1);
+	}
+
+	return normalized;
+}
+
+function isPrivateIpv6(hostname: string): boolean {
+	if (!hostname.includes(":")) {
+		return false;
+	}
+
+	if (
+		hostname === "::1" ||
+		hostname.startsWith("fe80:") ||
+		hostname.startsWith("fc") ||
+		hostname.startsWith("fd")
+	) {
+		return true;
+	}
+
+	return hostname.startsWith("::ffff:");
+}
+
+function isBlockedSourceHost(hostname: string): boolean {
+	const normalized = normalizeHostname(hostname);
+	if (!normalized) {
+		return true;
+	}
+
+	if (
+		normalized === "localhost" ||
+		normalized.endsWith(".local") ||
+		normalized.endsWith(".internal")
+	) {
+		return true;
+	}
+
+	if (isPrivateIpv4(normalized) || isPrivateIpv6(normalized)) {
+		return true;
+	}
+
+	return false;
+}
+
+function validateAvatarTarget(target: URL, requestUrl: URL): string | null {
+	if (!["http:", "https:"].includes(target.protocol)) {
+		return "头像地址仅支持 http/https 协议";
+	}
+
+	if (target.username || target.password) {
+		return "头像地址不允许携带用户名或密码";
+	}
+
+	if (isBlockedSourceHost(target.hostname)) {
+		return "头像地址不允许使用本地或内网主机";
+	}
+
+	if (
+		target.origin === requestUrl.origin &&
+		target.pathname.startsWith("/api/friend-links/avatar")
+	) {
+		return "头像地址无效";
+	}
+
+	return null;
 }
 
 function getBodyText(body: Record<string, unknown>, key: string): string {
@@ -181,6 +284,72 @@ friendLinksRoutes.post("/apply", async (c) => {
 	});
 
 	return c.redirect("/friends/apply?apply=success");
+});
+
+friendLinksRoutes.get("/avatar", async (c) => {
+	const rawUrl = sanitizeCanonicalUrl(c.req.query("url"));
+	if (!rawUrl) {
+		return c.text("头像地址不合法", 400);
+	}
+
+	let targetUrl: URL;
+	try {
+		targetUrl = new URL(rawUrl);
+	} catch {
+		return c.text("头像地址不合法", 400);
+	}
+
+	const validateError = validateAvatarTarget(targetUrl, new URL(c.req.url));
+	if (validateError) {
+		return c.text(validateError, 400);
+	}
+
+	const controller = new AbortController();
+	const timeout = setTimeout(() => {
+		controller.abort();
+	}, AVATAR_PROXY_TIMEOUT_MS);
+
+	try {
+		const response = await fetch(targetUrl.toString(), {
+			method: "GET",
+			headers: {
+				accept:
+					"image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+				"user-agent": "cf-astro-blog-friend-avatar-proxy/1.0",
+			},
+			redirect: "follow",
+			signal: controller.signal,
+		});
+		if (!response.ok) {
+			return c.text("头像暂时不可用", 502);
+		}
+
+		const contentType =
+			sanitizePlainText(
+				response.headers.get("content-type"),
+				120,
+			).toLowerCase() || "application/octet-stream";
+		if (!contentType.startsWith("image/")) {
+			return c.text("头像资源类型不支持", 415);
+		}
+
+		const data = await response.arrayBuffer();
+		if (data.byteLength > AVATAR_PROXY_MAX_BYTES) {
+			return c.text("头像文件过大", 413);
+		}
+
+		return new Response(data, {
+			headers: {
+				"content-type": contentType,
+				"cache-control": `public, max-age=${AVATAR_PROXY_CACHE_SECONDS}, stale-while-revalidate=86400`,
+				"x-content-type-options": "nosniff",
+			},
+		});
+	} catch {
+		return c.text("头像拉取失败", 502);
+	} finally {
+		clearTimeout(timeout);
+	}
 });
 
 export { friendLinksRoutes };
