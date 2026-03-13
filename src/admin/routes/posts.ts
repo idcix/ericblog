@@ -1,9 +1,6 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
-import {
-	autoFillPostSeoWithInternalAi,
-	generatePostSeoWithInternalAi,
-} from "@/admin/lib/ai-post-seo";
+import { generatePostSeoWithInternalAi } from "@/admin/lib/ai-post-seo";
 import { triggerDeployHook } from "@/admin/lib/deploy-hook";
 import { blogCategories, blogPosts, blogPostTags, blogTags } from "@/db/schema";
 import { getDb } from "@/lib/db";
@@ -518,17 +515,7 @@ posts.post("/", async (c) => {
 	if ("error" in parsed) {
 		return c.html(renderPostErrorPage(session.csrfToken, parsed.error), 400);
 	}
-	const aiSettings = await getResolvedAiSettings(db, c.env).catch(() => ({
-		settings: DEFAULT_AI_SETTINGS,
-		keySource: {
-			internal: "empty" as const,
-			public: "empty" as const,
-		},
-	}));
-	const postInput = await autoFillPostSeoWithInternalAi(
-		parsed.data,
-		aiSettings.settings.internal,
-	);
+	const postInput = parsed.data;
 
 	const now = new Date().toISOString();
 	const categoryId = await resolveCategoryId(
@@ -729,17 +716,7 @@ posts.post("/:id", async (c) => {
 	if ("error" in parsed) {
 		return c.html(renderPostErrorPage(session.csrfToken, parsed.error), 400);
 	}
-	const aiSettings = await getResolvedAiSettings(db, c.env).catch(() => ({
-		settings: DEFAULT_AI_SETTINGS,
-		keySource: {
-			internal: "empty" as const,
-			public: "empty" as const,
-		},
-	}));
-	const postInput = await autoFillPostSeoWithInternalAi(
-		parsed.data,
-		aiSettings.settings.internal,
-	);
+	const postInput = parsed.data;
 
 	const now = new Date().toISOString();
 

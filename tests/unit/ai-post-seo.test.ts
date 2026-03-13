@@ -166,5 +166,6 @@ describe("文章 AI 摘要与 SEO 自动生成", () => {
 		assert.match(source, /posts\.post\("\/ai-seo"/u);
 		assert.match(source, /generatePostSeoWithInternalAi/u);
 		assert.match(source, /内部 AI 接口未配置完整/u);
+		assert.doesNotMatch(source, /autoFillPostSeoWithInternalAi/u);
 	});
 });
