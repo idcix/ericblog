@@ -73,6 +73,10 @@ describe("源码回归保护", () => {
 		]);
 
 		assert.match(postPageSource, /getPublicPostBySlugCondition/u);
+		assert.match(
+			postPageSource,
+			/viewCount:\s*sql`\$\{blogPosts\.viewCount\}\s*\+\s*1`/u,
+		);
 		assert.match(searchPageSource, /pagefind-search\.js/u);
 		assert.match(searchPageSource, /pagefind-search-results/u);
 	});

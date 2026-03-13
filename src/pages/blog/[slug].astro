@@ -1,5 +1,5 @@
 ---
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { blogCategories, blogPosts } from "@/db/schema";
 import Post from "@/layouts/Post.astro";
 import { getDb } from "@/lib/db";
@@ -60,7 +60,7 @@ try {
 
 		// 浏览计数失败时不影响正文渲染
 		db.update(blogPosts)
-			.set({ viewCount: blogPosts.viewCount })
+			.set({ viewCount: sql`${blogPosts.viewCount} + 1` })
 			.where(eq(blogPosts.slug, slug))
 			.run()
 			.catch(() => {});
