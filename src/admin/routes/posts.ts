@@ -1,9 +1,13 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
-import { autoFillPostSeoWithInternalAi } from "@/admin/lib/ai-post-seo";
+import {
+	autoFillPostSeoWithInternalAi,
+	generatePostSeoWithInternalAi,
+} from "@/admin/lib/ai-post-seo";
 import { triggerDeployHook } from "@/admin/lib/deploy-hook";
 import { blogCategories, blogPosts, blogPostTags, blogTags } from "@/db/schema";
 import { getDb } from "@/lib/db";
+import { isOpenAICompatibleEndpointReady } from "@/lib/openai-compatible";
 import {
 	buildUrlSlug,
 	escapeHtml,
@@ -590,6 +594,86 @@ posts.post("/", async (c) => {
 	}
 
 	return c.redirect("/api/admin/posts");
+});
+
+posts.post("/ai-seo", async (c) => {
+	const session = getAuthenticatedSession(c);
+	const body = await c.req.parseBody();
+	if (!assertCsrfToken(getBodyText(body, "_csrf"), session)) {
+		return c.json(
+			{
+				success: false,
+				message: "CSRF 校验失败，请刷新页面后重试",
+			},
+			403,
+		);
+	}
+
+	const title = sanitizePlainText(body.title, 200);
+	const content = sanitizePlainText(body.content, 100_000, {
+		allowNewlines: true,
+		trim: false,
+	});
+	if (!title) {
+		return c.json(
+			{
+				success: false,
+				message: "请先填写文章标题后再生成",
+			},
+			400,
+		);
+	}
+	if (!content.trim()) {
+		return c.json(
+			{
+				success: false,
+				message: "请先填写正文后再生成",
+			},
+			400,
+		);
+	}
+
+	const db = getDb(c.env.DB);
+	const aiSettings = await getResolvedAiSettings(db, c.env).catch(() => ({
+		settings: DEFAULT_AI_SETTINGS,
+		keySource: {
+			internal: "empty" as const,
+			public: "empty" as const,
+		},
+	}));
+
+	if (!isOpenAICompatibleEndpointReady(aiSettings.settings.internal)) {
+		return c.json(
+			{
+				success: false,
+				message: "内部 AI 接口未配置完整，请先在外观设置中填写后再试",
+			},
+			503,
+		);
+	}
+
+	const generated = await generatePostSeoWithInternalAi(
+		{
+			title,
+			content,
+		},
+		aiSettings.settings.internal,
+	);
+	if (!generated) {
+		return c.json(
+			{
+				success: false,
+				message: "AI 暂未生成有效结果，请稍后重试",
+			},
+			502,
+		);
+	}
+
+	return c.json({
+		success: true,
+		data: generated,
+		keySource: aiSettings.keySource.internal,
+	});
 });
 
 posts.get("/:id/edit", async (c) => {

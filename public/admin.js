@@ -15,6 +15,8 @@ const draftToolbar = document.querySelector("[data-draft-toolbar='true']");
 const draftStatus = document.querySelector("[data-draft-status='true']");
 const draftRestoreButton = document.querySelector("[data-draft-restore='true']");
 const draftClearButton = document.querySelector("[data-draft-clear='true']");
+const aiSeoGenerateButton = document.querySelector("[data-ai-seo-generate='true']");
+const aiSeoStatus = document.querySelector("[data-ai-seo-status]");
 const editorForm = document.querySelector("form[data-editor-upload-url]");
 const editorUploadUrl =
 	editorForm instanceof HTMLFormElement
@@ -736,6 +738,119 @@ function setDraftUiStatus(message, mode = "") {
 	setStatusMessage(draftStatus, message, mode);
 }
 
+function setAiSeoUiStatus(message, mode = "") {
+	setStatusMessage(aiSeoStatus, message, mode);
+}
+
+function applyGeneratedSeoFieldsToEditor(fields) {
+	const mapping = [
+		["excerpt", fields?.excerpt],
+		["metaTitle", fields?.metaTitle],
+		["metaDescription", fields?.metaDescription],
+		["metaKeywords", fields?.metaKeywords],
+	];
+
+	let appliedCount = 0;
+	for (const [id, rawValue] of mapping) {
+		if (typeof rawValue !== "string") {
+			continue;
+		}
+
+		const value = rawValue.trim();
+		if (!value) {
+			continue;
+		}
+
+		const element = document.getElementById(id);
+		if (
+			!(element instanceof HTMLInputElement) &&
+			!(element instanceof HTMLTextAreaElement)
+		) {
+			continue;
+		}
+
+		element.value = value;
+		element.dispatchEvent(new Event("input", { bubbles: true }));
+		appliedCount += 1;
+	}
+
+	const seoDetails = document.querySelector(".editor-panel details");
+	if (seoDetails instanceof HTMLDetailsElement && appliedCount > 0) {
+		seoDetails.open = true;
+	}
+
+	return appliedCount;
+}
+
+async function triggerAiSeoGeneration() {
+	if (!(aiSeoGenerateButton instanceof HTMLButtonElement)) {
+		return;
+	}
+
+	const endpoint = aiSeoGenerateButton.dataset.aiSeoEndpoint || "";
+	if (!endpoint) {
+		setAiSeoUiStatus("AI 生成接口缺失，请刷新页面后重试", "error");
+		return;
+	}
+
+	if (!editorCsrfToken) {
+		setAiSeoUiStatus("CSRF 令牌缺失，请刷新页面后重试", "error");
+		return;
+	}
+
+	const title = getEditorFieldValue("title").trim();
+	const content = getEditorFieldValue("content");
+	if (!title) {
+		setAiSeoUiStatus("请先填写文章标题", "error");
+		return;
+	}
+	if (!content.trim()) {
+		setAiSeoUiStatus("请先填写正文内容", "error");
+		return;
+	}
+
+	const formData = new FormData();
+	formData.append("_csrf", editorCsrfToken);
+	formData.append("title", title);
+	formData.append("content", content);
+
+	const originalLabel = aiSeoGenerateButton.textContent || "AI 生成摘要与 SEO";
+	aiSeoGenerateButton.disabled = true;
+	aiSeoGenerateButton.textContent = "AI 生成中...";
+	setAiSeoUiStatus("AI 正在生成，请稍候");
+
+	try {
+		const response = await fetch(endpoint, {
+			method: "POST",
+			body: formData,
+			credentials: "same-origin",
+		});
+		const payload = await response.json().catch(() => ({}));
+		if (!response.ok || !payload?.success) {
+			throw new Error(payload?.message || "AI 生成失败，请稍后重试");
+		}
+
+		const appliedCount = applyGeneratedSeoFieldsToEditor(payload.data);
+		if (appliedCount === 0) {
+			setAiSeoUiStatus("AI 已返回结果，但没有可回填字段，请补充正文后重试", "error");
+			return;
+		}
+
+		scheduleEditorDraftSave();
+		setAiSeoUiStatus(
+			`AI 已回填 ${appliedCount} 个字段，请确认后再保存或发布`,
+			"success",
+		);
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "AI 生成失败，请稍后重试";
+		setAiSeoUiStatus(message, "error");
+	} finally {
+		aiSeoGenerateButton.disabled = false;
+		aiSeoGenerateButton.textContent = originalLabel;
+	}
+}
+
 function syncDraftActionButtons({
 	showToolbar = true,
 	showRestore = false,
@@ -1075,6 +1190,9 @@ editorForm?.addEventListener("submit", () => {
 	editorDraftState = null;
 });
 initEditorDraft();
+aiSeoGenerateButton?.addEventListener("click", () => {
+	void triggerAiSeoGeneration();
+});
 
 mediaUploadInput?.addEventListener("change", () => {
 	if (!(mediaUploadInput instanceof HTMLInputElement)) {

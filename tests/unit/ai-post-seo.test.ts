@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { afterEach, describe, test } from "node:test";
-import { autoFillPostSeoWithInternalAi } from "../../src/admin/lib/ai-post-seo";
+import {
+	autoFillPostSeoWithInternalAi,
+	generatePostSeoWithInternalAi,
+} from "../../src/admin/lib/ai-post-seo";
 import type { OpenAICompatibleEndpointConfig } from "../../src/lib/openai-compatible";
 
 const originalFetch = globalThis.fetch;
@@ -118,5 +122,49 @@ describe("文章 AI 摘要与 SEO 自动生成", () => {
 		assert.equal(called, false);
 		assert.equal(result.excerpt, null);
 		assert.equal(result.metaTitle, null);
+	});
+
+	test("手动生成功能可直接返回摘要与 SEO 字段", async () => {
+		globalThis.fetch = (async () =>
+			new Response(
+				JSON.stringify({
+					choices: [
+						{
+							message: {
+								content: JSON.stringify({
+									excerpt: "手动生成摘要",
+									metaTitle: "手动 SEO 标题",
+									metaDescription: "手动 SEO 描述",
+									metaKeywords: ["标签A", "标签B"],
+								}),
+							},
+						},
+					],
+				}),
+				{ status: 200, headers: { "content-type": "application/json" } },
+			)) as typeof fetch;
+
+		const result = await generatePostSeoWithInternalAi(
+			{
+				title: "示例文章",
+				content: "正文内容",
+			},
+			endpoint,
+		);
+
+		assert.deepEqual(result, {
+			excerpt: "手动生成摘要",
+			metaTitle: "手动 SEO 标题",
+			metaDescription: "手动 SEO 描述",
+			metaKeywords: "标签A, 标签B",
+		});
+	});
+
+	test("后台文章路由提供手动 AI 生成接口", async () => {
+		const source = await readFile("src/admin/routes/posts.ts", "utf8");
+
+		assert.match(source, /posts\.post\("\/ai-seo"/u);
+		assert.match(source, /generatePostSeoWithInternalAi/u);
+		assert.match(source, /内部 AI 接口未配置完整/u);
 	});
 });

@@ -14,6 +14,13 @@ interface GeneratedSeoPayload {
 	metaKeywords?: unknown;
 }
 
+export interface GeneratedPostSeoFields {
+	excerpt: string | null;
+	metaTitle: string | null;
+	metaDescription: string | null;
+	metaKeywords: string | null;
+}
+
 export interface PostSeoFields {
 	title: string;
 	content: string;
@@ -103,10 +110,9 @@ function normalizeKeywords(value: unknown): string | null {
 	return sanitizePlainText(keywords.join(", "), 200);
 }
 
-function mergeGeneratedSeo<T extends PostSeoFields>(
-	input: T,
+function normalizeGeneratedSeoFields(
 	generated: GeneratedSeoPayload,
-): T {
+): GeneratedPostSeoFields {
 	const excerpt =
 		sanitizePlainText(generated.excerpt, 200, {
 			allowNewlines: true,
@@ -117,12 +123,117 @@ function mergeGeneratedSeo<T extends PostSeoFields>(
 	const metaKeywords = normalizeKeywords(generated.metaKeywords);
 
 	return {
+		excerpt,
+		metaTitle,
+		metaDescription,
+		metaKeywords,
+	};
+}
+
+async function requestGeneratedSeoPayload(
+	input: { title: string; content: string },
+	endpoint: OpenAICompatibleEndpointConfig,
+): Promise<GeneratedSeoPayload | null> {
+	const responseContent = await requestOpenAICompatibleChatCompletion(
+		endpoint,
+		[
+			{
+				role: "system",
+				content:
+					"你是中文技术博客编辑与 SEO 顾问。请基于文章标题与正文生成摘要和 SEO 字段。严格返回 JSON 对象，不要输出解释文本。",
+			},
+			{
+				role: "user",
+				content: JSON.stringify({
+					task: "生成摘要与SEO",
+					rules: {
+						excerpt: "1 段中文摘要，120 字以内，准确概括文章核心内容",
+						metaTitle: "中文 SEO 标题，建议 18-36 字",
+						metaDescription: "中文 SEO 描述，建议 50-120 字",
+						metaKeywords: "3-8 个关键词，数组格式",
+					},
+					outputSchema: {
+						excerpt: "string",
+						metaTitle: "string",
+						metaDescription: "string",
+						metaKeywords: ["string"],
+					},
+					article: {
+						title: input.title,
+						content: input.content,
+					},
+				}),
+			},
+		],
+		{
+			temperature: 0.2,
+			maxTokens: 700,
+			timeoutMs: 20_000,
+			jsonMode: true,
+		},
+	);
+	const parsed = extractJsonObject(responseContent);
+	if (!parsed) {
+		return null;
+	}
+
+	return parsed as GeneratedSeoPayload;
+}
+
+function mergeGeneratedSeo<T extends PostSeoFields>(
+	input: T,
+	generated: GeneratedPostSeoFields,
+): T {
+	return {
 		...input,
-		excerpt: input.excerpt || excerpt,
-		metaTitle: input.metaTitle || metaTitle,
-		metaDescription: input.metaDescription || metaDescription,
-		metaKeywords: input.metaKeywords || metaKeywords,
+		excerpt: input.excerpt || generated.excerpt,
+		metaTitle: input.metaTitle || generated.metaTitle,
+		metaDescription: input.metaDescription || generated.metaDescription,
+		metaKeywords: input.metaKeywords || generated.metaKeywords,
 	} as T;
+}
+
+export async function generatePostSeoWithInternalAi(
+	input: Pick<PostSeoFields, "title" | "content">,
+	endpoint: OpenAICompatibleEndpointConfig,
+): Promise<GeneratedPostSeoFields | null> {
+	if (!isOpenAICompatibleEndpointReady(endpoint)) {
+		return null;
+	}
+
+	const title = sanitizePlainText(input.title, 200);
+	const cleanedContent = compactMarkdownForPrompt(input.content);
+	if (!title || !cleanedContent) {
+		return null;
+	}
+
+	try {
+		const generatedPayload = await requestGeneratedSeoPayload(
+			{
+				title,
+				content: cleanedContent,
+			},
+			endpoint,
+		);
+		if (!generatedPayload) {
+			return null;
+		}
+
+		const normalized = normalizeGeneratedSeoFields(generatedPayload);
+		if (
+			!normalized.excerpt &&
+			!normalized.metaTitle &&
+			!normalized.metaDescription &&
+			!normalized.metaKeywords
+		) {
+			return null;
+		}
+
+		return normalized;
+	} catch (error) {
+		console.error("[AI 摘要与 SEO] 手动生成失败", error);
+		return null;
+	}
 }
 
 export async function autoFillPostSeoWithInternalAi<T extends PostSeoFields>(
@@ -137,58 +248,20 @@ export async function autoFillPostSeoWithInternalAi<T extends PostSeoFields>(
 		return input;
 	}
 
-	const cleanedContent = compactMarkdownForPrompt(input.content);
-	if (!cleanedContent) {
-		return input;
-	}
-
 	try {
-		const responseContent = await requestOpenAICompatibleChatCompletion(
-			endpoint,
-			[
-				{
-					role: "system",
-					content:
-						"你是中文技术博客编辑与 SEO 顾问。请基于文章标题与正文生成摘要和 SEO 字段。严格返回 JSON 对象，不要输出解释文本。",
-				},
-				{
-					role: "user",
-					content: JSON.stringify({
-						task: "生成摘要与SEO",
-						rules: {
-							excerpt: "1 段中文摘要，120 字以内，准确概括文章核心内容",
-							metaTitle: "中文 SEO 标题，建议 18-36 字",
-							metaDescription: "中文 SEO 描述，建议 50-120 字",
-							metaKeywords: "3-8 个关键词，数组格式",
-						},
-						outputSchema: {
-							excerpt: "string",
-							metaTitle: "string",
-							metaDescription: "string",
-							metaKeywords: ["string"],
-						},
-						article: {
-							title: input.title,
-							content: cleanedContent,
-						},
-					}),
-				},
-			],
+		const generated = await generatePostSeoWithInternalAi(
 			{
-				temperature: 0.2,
-				maxTokens: 700,
-				timeoutMs: 20_000,
-				jsonMode: true,
+				title: input.title,
+				content: input.content,
 			},
+			endpoint,
 		);
-		const parsed = extractJsonObject(responseContent);
-		if (!parsed) {
+		if (!generated) {
 			return input;
 		}
 
-		return mergeGeneratedSeo(input, parsed);
-	} catch (error) {
-		console.error("[AI 摘要与 SEO] 自动生成失败，已回退手动填写模式", error);
+		return mergeGeneratedSeo(input, generated);
+	} catch {
 		return input;
 	}
 }

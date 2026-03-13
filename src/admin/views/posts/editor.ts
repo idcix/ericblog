@@ -100,6 +100,17 @@ export function postEditorPage(data: EditorData): string {
 					<div class="form-group">
 						<label for="excerpt">摘要</label>
 						<input type="text" id="excerpt" name="excerpt" class="form-input" value="${escapeAttribute(post?.excerpt || "")}" maxlength="200" />
+						<div class="draft-toolbar ai-seo-toolbar">
+							<button
+								type="button"
+								class="btn btn-sm"
+								data-ai-seo-generate="true"
+								data-ai-seo-endpoint="/api/admin/posts/ai-seo"
+							>
+								AI 生成摘要与 SEO
+							</button>
+							<span class="form-help" data-ai-seo-status>将基于当前标题和正文回填摘要、SEO 标题/描述/关键词</span>
+						</div>
 					</div>
 
 					<div class="form-group">

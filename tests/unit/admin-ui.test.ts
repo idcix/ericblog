@@ -140,6 +140,23 @@ describe("后台界面风格保护", () => {
 		assert.match(layoutSource, /draft-toolbar/u);
 	});
 
+	test("文章编辑页支持手动触发 AI 生成摘要与 SEO 并回填表单", async () => {
+		const [editorSource, adminScriptSource] = await Promise.all([
+			readFile("src/admin/views/posts/editor.ts", "utf8"),
+			readFile("public/admin.js", "utf8"),
+		]);
+
+		assert.match(editorSource, /data-ai-seo-generate="true"/u);
+		assert.match(
+			editorSource,
+			/data-ai-seo-endpoint="\/api\/admin\/posts\/ai-seo"/u,
+		);
+		assert.match(editorSource, /data-ai-seo-status/u);
+		assert.match(adminScriptSource, /triggerAiSeoGeneration/u);
+		assert.match(adminScriptSource, /applyGeneratedSeoFieldsToEditor/u);
+		assert.match(adminScriptSource, /AI 已回填/u);
+	});
+
 	test("文章列表提供取消定时和历史分类标签删除入口", async () => {
 		const source = await readFile("src/admin/views/posts/list.ts", "utf8");
 
