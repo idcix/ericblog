@@ -15,6 +15,9 @@ describe("Webmention 接入保护", () => {
 
 		assert.ok(source.includes("sourceContainsTargetLink"));
 		assert.ok(source.includes("target 必须是本站页面"));
+		assert.ok(source.includes('redirect: "manual"'));
+		assert.ok(source.includes("WEBMENTION_MAX_HTML_BYTES"));
+		assert.ok(source.includes("WEBMENTION_MAX_REDIRECTS"));
 		assert.ok(source.includes("onConflictDoUpdate"));
 		assert.ok(source.includes('status: "pending"'));
 	});

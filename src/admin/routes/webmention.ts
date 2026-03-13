@@ -9,6 +9,9 @@ import type { AdminAppEnv } from "../middleware/auth";
 const webmentionRoutes = new Hono<AdminAppEnv>();
 const targetOrigin = new URL(siteConfig.url).origin;
 const allowedStaticTargets = new Set(["/", "/blog", "/friends", "/search"]);
+const WEBMENTION_FETCH_TIMEOUT_MS = 8_000;
+const WEBMENTION_MAX_REDIRECTS = 3;
+const WEBMENTION_MAX_HTML_BYTES = 1024 * 1024;
 
 function getBodyText(body: Record<string, unknown>, key: string): string {
 	const value = body[key];
@@ -66,11 +69,46 @@ function isPrivateIpv4(hostname: string): boolean {
 		return true;
 	}
 
-	return a === 192 && b === 168;
+	if (a === 192 && b === 168) {
+		return true;
+	}
+
+	if (a === 100 && b >= 64 && b <= 127) {
+		return true;
+	}
+
+	return a === 198 && (b === 18 || b === 19);
+}
+
+function normalizeHostname(hostname: string): string {
+	const normalized = hostname.trim().toLowerCase();
+	if (normalized.startsWith("[") && normalized.endsWith("]")) {
+		return normalized.slice(1, -1);
+	}
+
+	return normalized;
+}
+
+function isPrivateIpv6(hostname: string): boolean {
+	if (!hostname.includes(":")) {
+		return false;
+	}
+
+	if (
+		hostname === "::1" ||
+		hostname.startsWith("fe80:") ||
+		hostname.startsWith("fc") ||
+		hostname.startsWith("fd")
+	) {
+		return true;
+	}
+
+	// 为了避免 IPv4 映射地址绕过，直接拒绝整个 ::ffff: 前缀。
+	return hostname.startsWith("::ffff:");
 }
 
 function isBlockedSourceHost(hostname: string): boolean {
-	const normalized = hostname.toLowerCase();
+	const normalized = normalizeHostname(hostname);
 	if (!normalized) {
 		return true;
 	}
@@ -83,20 +121,27 @@ function isBlockedSourceHost(hostname: string): boolean {
 		return true;
 	}
 
-	if (isPrivateIpv4(normalized)) {
-		return true;
-	}
-
-	if (
-		normalized === "::1" ||
-		normalized.startsWith("fe80:") ||
-		normalized.startsWith("fc") ||
-		normalized.startsWith("fd")
-	) {
+	if (isPrivateIpv4(normalized) || isPrivateIpv6(normalized)) {
 		return true;
 	}
 
 	return false;
+}
+
+function validateSourceUrl(sourceUrl: URL): string | null {
+	if (!["http:", "https:"].includes(sourceUrl.protocol)) {
+		return "source 仅允许使用 http/https 协议。";
+	}
+
+	if (sourceUrl.username || sourceUrl.password) {
+		return "source URL 不允许携带用户名或密码。";
+	}
+
+	if (isBlockedSourceHost(sourceUrl.hostname)) {
+		return "source 不允许使用本地或内网主机地址。";
+	}
+
+	return null;
 }
 
 function decodeHtmlEntities(value: string): string {
@@ -234,6 +279,139 @@ function sourceContainsTargetLink(html: string, targetUrl: URL): boolean {
 	});
 }
 
+function isRedirectStatus(status: number): boolean {
+	return [301, 302, 303, 307, 308].includes(status);
+}
+
+async function readResponseTextWithLimit(
+	response: Response,
+	maxBytes: number,
+): Promise<string | null> {
+	const contentLength = Number(response.headers.get("content-length"));
+	if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+		return null;
+	}
+
+	if (!response.body) {
+		return "";
+	}
+
+	const reader = response.body.getReader();
+	const chunks: Uint8Array[] = [];
+	let totalBytes = 0;
+
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) {
+			break;
+		}
+
+		if (!value) {
+			continue;
+		}
+
+		totalBytes += value.byteLength;
+		if (totalBytes > maxBytes) {
+			await reader.cancel();
+			return null;
+		}
+
+		chunks.push(value);
+	}
+
+	const decoder = new TextDecoder();
+	let text = "";
+	for (const chunk of chunks) {
+		text += decoder.decode(chunk, { stream: true });
+	}
+	text += decoder.decode();
+
+	return text;
+}
+
+type SourceHtmlFetchResult =
+	| { ok: true; html: string }
+	| { ok: false; error: string };
+
+async function fetchSourceHtml(sourceUrl: URL): Promise<SourceHtmlFetchResult> {
+	const abortController = new AbortController();
+	const timeoutId = setTimeout(() => {
+		abortController.abort();
+	}, WEBMENTION_FETCH_TIMEOUT_MS);
+
+	try {
+		let currentUrl = new URL(sourceUrl.toString());
+
+		for (
+			let redirectCount = 0;
+			redirectCount <= WEBMENTION_MAX_REDIRECTS;
+			redirectCount += 1
+		) {
+			const validationError = validateSourceUrl(currentUrl);
+			if (validationError) {
+				return { ok: false, error: validationError };
+			}
+
+			let response: Response;
+			try {
+				response = await fetch(currentUrl.toString(), {
+					headers: {
+						Accept: "text/html,application/xhtml+xml",
+						"User-Agent": "cf-astro-blog-starter-webmention/1.0",
+					},
+					redirect: "manual",
+					signal: abortController.signal,
+				});
+			} catch (error) {
+				if (error instanceof Error && error.name === "AbortError") {
+					return { ok: false, error: "抓取 source 页面超时。" };
+				}
+				return { ok: false, error: "抓取 source 页面失败。" };
+			}
+
+			if (isRedirectStatus(response.status)) {
+				const location = response.headers.get("location");
+				if (!location) {
+					return { ok: false, error: "source 跳转响应缺少 location。" };
+				}
+
+				try {
+					currentUrl = new URL(location, currentUrl);
+				} catch {
+					return { ok: false, error: "source 跳转地址不合法。" };
+				}
+				continue;
+			}
+
+			if (!response.ok) {
+				return { ok: false, error: "无法访问 source 页面。" };
+			}
+
+			const contentType = response.headers.get("content-type") || "";
+			if (
+				!contentType.includes("text/html") &&
+				!contentType.includes("application/xhtml+xml")
+			) {
+				return { ok: false, error: "source 必须是 HTML 页面。" };
+			}
+
+			const html = await readResponseTextWithLimit(
+				response,
+				WEBMENTION_MAX_HTML_BYTES,
+			);
+			if (html === null) {
+				return { ok: false, error: "source 页面体积过大，已拒绝处理。" };
+			}
+
+			return { ok: true, html };
+		}
+
+		return { ok: false, error: "source 跳转次数过多，已拒绝处理。" };
+	} finally {
+		clearTimeout(timeoutId);
+	}
+}
+
 async function validateTargetPath(
 	c: Context<AdminAppEnv>,
 	targetUrl: URL,
@@ -287,8 +465,9 @@ webmentionRoutes.post("/", async (c) => {
 		return c.text("target 必须是本站页面。", 400);
 	}
 
-	if (isBlockedSourceHost(sourceUrl.hostname)) {
-		return c.text("source 不允许使用本地或内网主机地址。", 400);
+	const sourceValidationError = validateSourceUrl(sourceUrl);
+	if (sourceValidationError) {
+		return c.text(sourceValidationError, 400);
 	}
 
 	const targetPath = normalizePathname(targetUrl.pathname);
@@ -301,30 +480,11 @@ webmentionRoutes.post("/", async (c) => {
 		return c.text("target 页面不存在或不在允许接收 Webmention 的范围内。", 400);
 	}
 
-	let sourceHtml = "";
-	try {
-		const response = await fetch(sourceUrl.toString(), {
-			headers: {
-				Accept: "text/html,application/xhtml+xml",
-				"User-Agent": "cf-astro-blog-starter-webmention/1.0",
-			},
-		});
-		if (!response.ok) {
-			return c.text("无法访问 source 页面。", 400);
-		}
-
-		const contentType = response.headers.get("content-type") || "";
-		if (
-			!contentType.includes("text/html") &&
-			!contentType.includes("application/xhtml+xml")
-		) {
-			return c.text("source 必须是 HTML 页面。", 400);
-		}
-
-		sourceHtml = await response.text();
-	} catch {
-		return c.text("抓取 source 页面失败。", 400);
+	const sourceResult = await fetchSourceHtml(sourceUrl);
+	if (!sourceResult.ok) {
+		return c.text(sourceResult.error, 400);
 	}
+	const sourceHtml = sourceResult.html;
 
 	if (!sourceContainsTargetLink(sourceHtml, targetUrl)) {
 		return c.text("source 页面中未找到指向 target 的链接。", 400);

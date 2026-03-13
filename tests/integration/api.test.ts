@@ -293,6 +293,99 @@ describe("后台接口", () => {
 		}
 	});
 
+	test("POST /webmention 会拒绝跳转到本地地址的 source", async () => {
+		const { db, calls } = createWebMentionMockD1();
+		const sourceUrl = "https://example.org/posts/redirect-local";
+		const targetUrl = "https://blog.ericterminal.com/search";
+		const originalFetch = globalThis.fetch;
+
+		globalThis.fetch = async (input) => {
+			if (String(input) === sourceUrl) {
+				return new Response(null, {
+					status: 302,
+					headers: {
+						location: "http://localhost/internal",
+					},
+				});
+			}
+
+			return new Response("not found", { status: 404 });
+		};
+
+		try {
+			const res = await app.request(
+				"/webmention",
+				{
+					method: "POST",
+					headers: {
+						"content-type": "application/x-www-form-urlencoded",
+					},
+					body: `source=${encodeURIComponent(sourceUrl)}&target=${encodeURIComponent(targetUrl)}`,
+				},
+				{
+					...mockEnv,
+					DB: db,
+				} as unknown as Env,
+			);
+
+			assert.equal(res.status, 400);
+			assert.match(await res.text(), /本地或内网主机地址/u);
+			assert.ok(
+				!calls.some((entry) =>
+					/insert into\s+"?web_mentions"?/iu.test(entry.sql),
+				),
+			);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
+	test("POST /webmention 会拒绝体积过大的 source 页面", async () => {
+		const { db, calls } = createWebMentionMockD1();
+		const sourceUrl = "https://example.org/posts/huge";
+		const targetUrl = "https://blog.ericterminal.com/search";
+		const originalFetch = globalThis.fetch;
+		const hugeHtml = `<html><body>${"a".repeat(1024 * 1024 + 128)}</body></html>`;
+
+		globalThis.fetch = async (input) => {
+			if (String(input) === sourceUrl) {
+				return new Response(hugeHtml, {
+					status: 200,
+					headers: { "content-type": "text/html; charset=utf-8" },
+				});
+			}
+
+			return new Response("not found", { status: 404 });
+		};
+
+		try {
+			const res = await app.request(
+				"/webmention",
+				{
+					method: "POST",
+					headers: {
+						"content-type": "application/x-www-form-urlencoded",
+					},
+					body: `source=${encodeURIComponent(sourceUrl)}&target=${encodeURIComponent(targetUrl)}`,
+				},
+				{
+					...mockEnv,
+					DB: db,
+				} as unknown as Env,
+			);
+
+			assert.equal(res.status, 400);
+			assert.match(await res.text(), /体积过大/u);
+			assert.ok(
+				!calls.some((entry) =>
+					/insert into\s+"?web_mentions"?/iu.test(entry.sql),
+				),
+			);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
 	test("POST /auth/login 会拒绝密码表单登录", async () => {
 		const res = await app.request(
 			"/auth/login",
