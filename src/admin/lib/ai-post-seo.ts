@@ -8,6 +8,7 @@ import { type PostStatus, sanitizePlainText } from "@/lib/security";
 const MAX_CONTENT_CHARS = 12_000;
 const SEO_COMPLETION_MAX_TOKENS = 1_200;
 const ERROR_RESPONSE_SNIPPET_LENGTH = 480;
+const EXCERPT_MAX_CHARS = 88;
 
 interface GeneratedSeoPayload {
 	excerpt?: unknown;
@@ -193,10 +194,7 @@ function normalizeKeywords(value: unknown): string | null {
 function normalizeGeneratedSeoFields(
 	generated: GeneratedSeoPayload,
 ): GeneratedPostSeoFields {
-	const excerpt =
-		sanitizePlainText(generated.excerpt, 200, {
-			allowNewlines: true,
-		}) || null;
+	const excerpt = normalizeGeneratedExcerpt(generated.excerpt);
 	const metaTitle = sanitizePlainText(generated.metaTitle, 200) || null;
 	const metaDescription =
 		sanitizePlainText(generated.metaDescription, 160) || null;
@@ -208,6 +206,44 @@ function normalizeGeneratedSeoFields(
 		metaDescription,
 		metaKeywords,
 	};
+}
+
+function normalizeGeneratedExcerpt(value: unknown): string | null {
+	const raw =
+		sanitizePlainText(value, 320, {
+			allowNewlines: true,
+		}) || "";
+	if (!raw) {
+		return null;
+	}
+
+	let excerpt = raw
+		.replaceAll(/[\r\n]+/g, " ")
+		.replaceAll(/\s+/g, " ")
+		.trim();
+
+	// 将常见第三人称主语改为第一人称，避免“作者/本文”口吻。
+	excerpt = excerpt
+		.replaceAll(
+			/(作者|博主)(?=分享|记录|介绍|提到|讲述|总结|复盘|展示|完善|讨论|反思)/gu,
+			"我",
+		)
+		.replaceAll(
+			/(本文|该文|这篇文章|文章)(?=分享|记录|介绍|提到|讲述|总结|复盘|展示|完善|讨论|反思)/gu,
+			"我",
+		);
+	excerpt = excerpt.replaceAll(/我我+/g, "我");
+
+	if (excerpt.length > EXCERPT_MAX_CHARS) {
+		const firstSentence = excerpt
+			.match(/^[\s\S]{0,220}?[。！？!?]/u)?.[0]
+			?.trim();
+		if (firstSentence && firstSentence.length >= 18) {
+			excerpt = firstSentence;
+		}
+	}
+
+	return sanitizePlainText(excerpt, EXCERPT_MAX_CHARS) || null;
 }
 
 function normalizeLooseTextField(
@@ -325,14 +361,15 @@ async function requestGeneratedSeoPayload(
 			{
 				role: "system",
 				content:
-					"你是中文技术博客编辑与 SEO 顾问。请基于文章标题与正文生成摘要和 SEO 字段。严格返回 JSON 对象，不要输出解释文本。",
+					"你是中文技术博客编辑与 SEO 顾问。请基于文章标题与正文生成摘要和 SEO 字段。摘要必须使用第一人称作者口吻，语言自然，不要使用“作者/本文/该文/这篇文章”等第三人称。严格返回 JSON 对象，不要输出解释文本。",
 			},
 			{
 				role: "user",
 				content: JSON.stringify({
 					task: "生成摘要与SEO",
 					rules: {
-						excerpt: "1 段中文摘要，120 字以内，准确概括文章核心内容",
+						excerpt:
+							"1 段第一人称中文摘要，建议 45-80 字，像作者本人在叙述，不要写“作者/本文/该文/这篇文章”",
 						metaTitle: "中文 SEO 标题，建议 18-36 字",
 						metaDescription: "中文 SEO 描述，建议 50-120 字",
 						metaKeywords: "3-8 个关键词，数组格式",

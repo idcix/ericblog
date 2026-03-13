@@ -185,7 +185,7 @@ describe("文章 AI 摘要与 SEO 自动生成", () => {
 		);
 
 		assert.deepEqual(result, {
-			excerpt: "第一行\n第二行",
+			excerpt: "第一行 第二行",
 			metaTitle: "标题",
 			metaDescription: "描述",
 			metaKeywords: "A, B",
@@ -217,11 +217,45 @@ describe("文章 AI 摘要与 SEO 自动生成", () => {
 		);
 
 		assert.deepEqual(result, {
-			excerpt: "作者分享了博客上线一周后的近况，包括利用 AI 辅助（Vibe",
+			excerpt: "我分享了博客上线一周后的近况，包括利用 AI 辅助（Vibe",
 			metaTitle: null,
 			metaDescription: null,
 			metaKeywords: null,
 		});
+	});
+
+	test("手动生成功能会将第三人称长摘要收敛为第一人称短句", async () => {
+		globalThis.fetch = (async () =>
+			new Response(
+				JSON.stringify({
+					choices: [
+						{
+							message: {
+								content: JSON.stringify({
+									excerpt:
+										"作者分享了博客上线一周后的近况，包括利用 AI 辅助开发（Vibe Coding）完善功能、在社区宣传收获好评，以及对前端设计（如鼠标倾斜效果）的心得。虽然暂时遗忘了预定的写作计划，但记录了博客初创期的真实心路历程。",
+									metaTitle: "标题",
+									metaDescription: "描述",
+									metaKeywords: ["博客", "AI"],
+								}),
+							},
+						},
+					],
+				}),
+				{ status: 200, headers: { "content-type": "application/json" } },
+			)) as typeof fetch;
+
+		const result = await generatePostSeoWithInternalAi(
+			{
+				title: "示例文章",
+				content: "正文内容",
+			},
+			endpoint,
+		);
+
+		assert.ok(result?.excerpt?.startsWith("我"));
+		assert.ok(!(result?.excerpt ?? "").includes("作者"));
+		assert.ok((result?.excerpt?.length ?? 0) <= 88);
 	});
 
 	test("后台文章路由提供手动 AI 生成接口", async () => {
