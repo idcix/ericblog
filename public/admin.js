@@ -1889,8 +1889,8 @@ const appearanceUploadDropzone = document.querySelector(
 );
 const uploadInput = document.querySelector("[data-appearance-upload-input]");
 const appearanceControls = {
-	backgroundOpacity: document.querySelector(
-		'[data-appearance-control="backgroundOpacity"]',
+	backgroundTransparency: document.querySelector(
+		'[data-appearance-control="backgroundTransparency"]',
 	),
 	backgroundScale: document.querySelector(
 		'[data-appearance-control="backgroundScale"]',
@@ -1904,14 +1904,14 @@ const appearanceControls = {
 	backgroundPositionY: document.querySelector(
 		'[data-appearance-control="backgroundPositionY"]',
 	),
-	heroCardOpacity: document.querySelector(
-		'[data-appearance-control="heroCardOpacity"]',
+	heroCardTransparency: document.querySelector(
+		'[data-appearance-control="heroCardTransparency"]',
 	),
 	heroCardBlur: document.querySelector(
 		'[data-appearance-control="heroCardBlur"]',
 	),
-	articlePanelOpacity: document.querySelector(
-		'[data-appearance-control="articlePanelOpacity"]',
+	articlePanelTransparency: document.querySelector(
+		'[data-appearance-control="articlePanelTransparency"]',
 	),
 	articlePanelBlur: document.querySelector(
 		'[data-appearance-control="articlePanelBlur"]',
@@ -1951,32 +1951,35 @@ function updateAppearancePreview() {
 	const blur = Number(blurInput.value);
 	const positionX = Number(positionXInput.value);
 	const positionY = Number(positionYInput.value);
-	const backgroundOpacityInput = appearanceControls.backgroundOpacity;
-	const heroCardOpacityInput = appearanceControls.heroCardOpacity;
+	const backgroundTransparencyInput = appearanceControls.backgroundTransparency;
+	const heroCardTransparencyInput = appearanceControls.heroCardTransparency;
 	const heroCardBlurInput = appearanceControls.heroCardBlur;
-	const articlePanelOpacityInput = appearanceControls.articlePanelOpacity;
+	const articlePanelTransparencyInput = appearanceControls.articlePanelTransparency;
 	const articlePanelBlurInput = appearanceControls.articlePanelBlur;
 
-	if (backgroundOpacityInput instanceof HTMLInputElement) {
+	if (backgroundTransparencyInput instanceof HTMLInputElement) {
 		updateAppearanceDisplay(
-			"backgroundOpacity",
-			Number(backgroundOpacityInput.value),
+			"backgroundTransparency",
+			Number(backgroundTransparencyInput.value),
 		);
 	}
 	updateAppearanceDisplay("backgroundScale", scale);
 	updateAppearanceDisplay("backgroundBlur", blur);
 	updateAppearanceDisplay("backgroundPositionX", positionX);
 	updateAppearanceDisplay("backgroundPositionY", positionY);
-	if (heroCardOpacityInput instanceof HTMLInputElement) {
-		updateAppearanceDisplay("heroCardOpacity", Number(heroCardOpacityInput.value));
+	if (heroCardTransparencyInput instanceof HTMLInputElement) {
+		updateAppearanceDisplay(
+			"heroCardTransparency",
+			Number(heroCardTransparencyInput.value),
+		);
 	}
 	if (heroCardBlurInput instanceof HTMLInputElement) {
 		updateAppearanceDisplay("heroCardBlur", Number(heroCardBlurInput.value));
 	}
-	if (articlePanelOpacityInput instanceof HTMLInputElement) {
+	if (articlePanelTransparencyInput instanceof HTMLInputElement) {
 		updateAppearanceDisplay(
-			"articlePanelOpacity",
-			Number(articlePanelOpacityInput.value),
+			"articlePanelTransparency",
+			Number(articlePanelTransparencyInput.value),
 		);
 	}
 	if (articlePanelBlurInput instanceof HTMLInputElement) {

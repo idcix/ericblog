@@ -496,7 +496,7 @@ export function normalizeSiteAppearanceInput(
 			: null,
 		backgroundOpacity: clampInteger(
 			input.backgroundOpacity,
-			20,
+			0,
 			100,
 			DEFAULT_SITE_APPEARANCE.backgroundOpacity,
 		),
@@ -526,8 +526,8 @@ export function normalizeSiteAppearanceInput(
 		),
 		heroCardOpacity: clampInteger(
 			input.heroCardOpacity,
-			4,
-			40,
+			0,
+			100,
 			DEFAULT_SITE_APPEARANCE.heroCardOpacity,
 		),
 		heroCardBlur: clampInteger(
@@ -538,8 +538,8 @@ export function normalizeSiteAppearanceInput(
 		),
 		postCardOpacity: clampInteger(
 			input.postCardOpacity,
-			4,
-			40,
+			0,
+			100,
 			DEFAULT_SITE_APPEARANCE.postCardOpacity,
 		),
 		postCardBlur: clampInteger(
@@ -550,8 +550,8 @@ export function normalizeSiteAppearanceInput(
 		),
 		articlePanelOpacity: clampInteger(
 			input.articlePanelOpacity,
-			4,
-			40,
+			0,
+			100,
 			DEFAULT_SITE_APPEARANCE.articlePanelOpacity,
 		),
 		articlePanelBlur: clampInteger(
