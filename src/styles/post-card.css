@@ -26,16 +26,10 @@
 	 * saturate/brightness 保持中性，避免对底图做额外染色与压暗。
 	 * 视觉层次由 blur + 半透明背景 + 边框/阴影提供。
 	 */
-	backdrop-filter: blur(var(--post-card-blur-effective)) saturate(100%) brightness(1);
-	-webkit-backdrop-filter: blur(var(--post-card-blur-effective)) saturate(100%) brightness(1);
-	opacity: 0;
-	animation: post-card-settle 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
-	transition:
-		transform var(--transition),
-		border-color var(--transition),
-		box-shadow var(--transition),
-		background-color var(--transition),
-		backdrop-filter var(--transition);
+	backdrop-filter: blur(var(--post-card-blur-effective)) saturate(100%)
+		brightness(1);
+	-webkit-backdrop-filter: blur(var(--post-card-blur-effective)) saturate(100%)
+		brightness(1);
 	opacity: 0;
 	animation: post-card-settle 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
 	transition:
@@ -335,7 +329,10 @@
  * 确保 PostCard 的半透明背景不被更低特异性的 glass-panel 规则重置。
  */
 .post-card.glass-panel {
-	background: rgba(var(--card-surface-rgb), calc(var(--post-card-opacity, 14) / 100));
+	background: rgba(
+		var(--card-surface-rgb),
+		calc(var(--post-card-opacity, 14) / 100)
+	);
 }
 
 /*

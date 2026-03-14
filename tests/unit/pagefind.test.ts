@@ -13,7 +13,9 @@ describe("Pagefind 搜索集成", () => {
 		assert.ok(searchScript.includes("搜索索引为空"));
 		assert.ok(searchScript.includes("history.pushState"));
 		assert.ok(searchScript.includes("buildSearchHref"));
-		assert.ok(searchScript.includes("updateAddressBar(state, { mode: \"push\" })"));
+		assert.ok(
+			searchScript.includes('updateAddressBar(state, { mode: "push" })'),
+		);
 		assert.match(
 			searchScript,
 			/form\.addEventListener\("submit",\s*async \(event\) => \{[\s\S]*updateAddressBar\(state,\s*\{\s*mode:\s*"push"\s*\}\);[\s\S]*performSearch\(context,\s*state\);[\s\S]*\}\);/u,

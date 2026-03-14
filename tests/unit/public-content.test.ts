@@ -156,8 +156,12 @@ describe("源码回归保护", () => {
 	});
 
 	test("文章详情页支持左侧作者信息栏、目录导航并提供阅读去透明度开关", async () => {
-		const [postLayoutSource, postPageSource, articleToggleScript, sidebarStickyScript] =
-			await Promise.all([
+		const [
+			postLayoutSource,
+			postPageSource,
+			articleToggleScript,
+			sidebarStickyScript,
+		] = await Promise.all([
 			readFile("src/layouts/Post.astro", "utf8"),
 			readFile("src/pages/blog/[slug].astro", "utf8"),
 			readFile("public/article-transparency-toggle.js", "utf8"),
