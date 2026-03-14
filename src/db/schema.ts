@@ -149,6 +149,8 @@ export const siteAppearanceSettings = sqliteTable("site_appearance_settings", {
 	heroCardBlur: integer("hero_card_blur").notNull().default(18),
 	postCardOpacity: integer("post_card_opacity").notNull().default(14),
 	postCardBlur: integer("post_card_blur").notNull().default(18),
+	articlePanelOpacity: integer("article_panel_opacity").notNull().default(14),
+	articlePanelBlur: integer("article_panel_blur").notNull().default(18),
 	headerSubtitle: text("header_subtitle")
 		.notNull()
 		.default("流畅、克制、持续更新的技术写作"),

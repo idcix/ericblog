@@ -35,6 +35,8 @@ export interface SiteAppearance {
 	heroCardBlur: number;
 	postCardOpacity: number;
 	postCardBlur: number;
+	articlePanelOpacity: number;
+	articlePanelBlur: number;
 	headerSubtitle: string;
 	navLinks: SiteNavLink[];
 	navLink1Label: string;
@@ -108,6 +110,8 @@ export const DEFAULT_SITE_APPEARANCE: SiteAppearance = {
 	heroCardBlur: 18,
 	postCardOpacity: 14,
 	postCardBlur: 18,
+	articlePanelOpacity: 14,
+	articlePanelBlur: 18,
 	headerSubtitle: "流畅、克制、持续更新的技术写作",
 	navLinks: [...DEFAULT_NAV_LINKS],
 	navLink1Label: DEFAULT_NAV_LINKS[0].label,
@@ -536,6 +540,18 @@ export function normalizeSiteAppearanceInput(
 			48,
 			DEFAULT_SITE_APPEARANCE.postCardBlur,
 		),
+		articlePanelOpacity: clampInteger(
+			input.articlePanelOpacity,
+			4,
+			40,
+			DEFAULT_SITE_APPEARANCE.articlePanelOpacity,
+		),
+		articlePanelBlur: clampInteger(
+			input.articlePanelBlur,
+			0,
+			48,
+			DEFAULT_SITE_APPEARANCE.articlePanelBlur,
+		),
 		headerSubtitle: normalizeText(
 			input.headerSubtitle,
 			120,
@@ -649,6 +665,8 @@ export async function getSiteAppearance(db: Database): Promise<SiteAppearance> {
 			heroCardBlur: siteAppearanceSettings.heroCardBlur,
 			postCardOpacity: siteAppearanceSettings.postCardOpacity,
 			postCardBlur: siteAppearanceSettings.postCardBlur,
+			articlePanelOpacity: siteAppearanceSettings.articlePanelOpacity,
+			articlePanelBlur: siteAppearanceSettings.articlePanelBlur,
 			headerSubtitle: siteAppearanceSettings.headerSubtitle,
 			navLink1Label: siteAppearanceSettings.navLink1Label,
 			navLink1Href: siteAppearanceSettings.navLink1Href,
@@ -774,6 +792,8 @@ export async function saveSiteAppearance(
 			heroCardBlur: normalized.heroCardBlur,
 			postCardOpacity: normalized.postCardOpacity,
 			postCardBlur: normalized.postCardBlur,
+			articlePanelOpacity: normalized.articlePanelOpacity,
+			articlePanelBlur: normalized.articlePanelBlur,
 			headerSubtitle: normalized.headerSubtitle,
 			navLink1Label: normalized.navLink1Label,
 			navLink1Href: normalized.navLink1Href,
@@ -815,6 +835,8 @@ export async function saveSiteAppearance(
 				heroCardBlur: normalized.heroCardBlur,
 				postCardOpacity: normalized.postCardOpacity,
 				postCardBlur: normalized.postCardBlur,
+				articlePanelOpacity: normalized.articlePanelOpacity,
+				articlePanelBlur: normalized.articlePanelBlur,
 				headerSubtitle: normalized.headerSubtitle,
 				navLink1Label: normalized.navLink1Label,
 				navLink1Href: normalized.navLink1Href,

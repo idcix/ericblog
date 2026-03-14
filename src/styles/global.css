@@ -539,6 +539,12 @@ html[data-admin-preview="true"] .site-main {
 	z-index: 1;
 }
 
+/* 文章页 glass-panel 独立参数，覆盖默认卡片变量 */
+.article-shell .glass-panel::after {
+	--glass-panel-blur: var(--article-panel-blur, 18px);
+	--glass-panel-opacity: calc(var(--article-panel-opacity, 14) / 100);
+}
+
 .glass-panel > * {
 	position: relative;
 	z-index: 2;

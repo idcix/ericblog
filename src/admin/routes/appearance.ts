@@ -690,6 +690,25 @@ function renderAppearancePage(options: {
 					</div>
 				</section>
 				<section class="appearance-panel">
+					<h2>文章页卡片参数</h2>
+					<div class="appearance-ranges">
+						<div class="appearance-range">
+							<div class="appearance-range-meta">
+								<label for="articlePanelOpacity">文章页透明度</label>
+								<span data-appearance-display="articlePanelOpacity">${escapeHtml(String(settings.articlePanelOpacity))}%</span>
+							</div>
+							<input id="articlePanelOpacity" name="articlePanelOpacity" type="range" min="4" max="40" value="${escapeAttribute(String(settings.articlePanelOpacity))}" data-appearance-control="articlePanelOpacity" />
+						</div>
+						<div class="appearance-range">
+							<div class="appearance-range-meta">
+								<label for="articlePanelBlur">文章页高斯模糊</label>
+								<span data-appearance-display="articlePanelBlur">${escapeHtml(String(settings.articlePanelBlur))} px</span>
+							</div>
+							<input id="articlePanelBlur" name="articlePanelBlur" type="range" min="0" max="48" value="${escapeAttribute(String(settings.articlePanelBlur))}" data-appearance-control="articlePanelBlur" />
+						</div>
+					</div>
+				</section>
+				<section class="appearance-panel">
 					<h2>右侧信息卡文案</h2>
 					<div class="form-group">
 						<label for="heroSignalLabel">右侧卡片标签</label>
@@ -1034,6 +1053,12 @@ appearance.post("/", async (c) => {
 	const unifiedCardBlur = Number(
 		getBodyText(body, "heroCardBlur") || Number.NaN,
 	);
+	const articlePanelOpacity = Number(
+		getBodyText(body, "articlePanelOpacity") || Number.NaN,
+	);
+	const articlePanelBlur = Number(
+		getBodyText(body, "articlePanelBlur") || Number.NaN,
+	);
 	const db = getDb(c.env.DB);
 	const storedAiSettings = await getAiSettings(db).catch(
 		() => DEFAULT_AI_SETTINGS,
@@ -1062,6 +1087,8 @@ appearance.post("/", async (c) => {
 		heroCardBlur: unifiedCardBlur,
 		postCardOpacity: unifiedCardOpacity,
 		postCardBlur: unifiedCardBlur,
+		articlePanelOpacity,
+		articlePanelBlur,
 		headerSubtitle: getBodyText(body, "headerSubtitle"),
 		navLinks: buildLinkItemsFromBody(
 			getBodyTexts(body, "navLinkLabel"),
