@@ -647,6 +647,13 @@ function renderAppearancePage(options: {
 					<div class="appearance-controls">
 						<div class="appearance-range">
 							<div class="appearance-range-meta">
+								<label for="backgroundOpacity">背景不透明度</label>
+								<span data-appearance-display="backgroundOpacity">${escapeHtml(String(settings.backgroundOpacity))}%</span>
+							</div>
+							<input id="backgroundOpacity" name="backgroundOpacity" type="range" min="20" max="100" value="${escapeAttribute(String(settings.backgroundOpacity))}" data-appearance-control="backgroundOpacity" />
+						</div>
+						<div class="appearance-range">
+							<div class="appearance-range-meta">
 								<label for="backgroundScale">缩放</label>
 								<span data-appearance-display="backgroundScale">${escapeHtml(String(backgroundScaleOffset))}%</span>
 							</div>
