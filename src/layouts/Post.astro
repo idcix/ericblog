@@ -51,11 +51,12 @@ const tocEntries = (toc ?? [])
 		text: item.text.trim(),
 	}))
 	.filter((item) => item.id && item.text);
+const hasToc = tocEntries.length > 0;
 ---
 
 <Base title={title} description={description} image={image} canonicalUrl={canonicalUrl}>
 	<article class="article-shell">
-		<aside class="article-sidebar">
+		<aside class:list={["article-sidebar", { "article-sidebar-with-toc": hasToc }]}>
 			<section class="article-profile glass-panel">
 				<div class="article-profile-avatar-frame">
 					{articleSidebarAvatarPath ? (
@@ -98,7 +99,7 @@ const tocEntries = (toc ?? [])
 					)}
 				</div>
 			</section>
-				{tocEntries.length > 0 && (
+				{hasToc && (
 					<nav class="article-toc glass-panel" aria-label="文章目录">
 						<div class="article-toc-head">
 							<span>目录</span>
@@ -168,6 +169,7 @@ const tocEntries = (toc ?? [])
 			</div>
 		</article>
 	<script is:inline src="/article-transparency-toggle.js"></script>
+	<script is:inline src="/article-sidebar-sticky.js"></script>
 </Base>
 
 <style>
@@ -184,6 +186,9 @@ const tocEntries = (toc ?? [])
 	}
 
 	.article-sidebar {
+		--article-sidebar-sticky-top: 6.2rem;
+		--article-sidebar-gap: 0.8rem;
+		--article-profile-height: 0px;
 		align-self: stretch;
 		display: grid;
 		align-content: start;
@@ -195,6 +200,11 @@ const tocEntries = (toc ?? [])
 		display: grid;
 		gap: 0.8rem;
 		padding: 1.05rem;
+	}
+
+	.article-sidebar-with-toc .article-profile {
+		position: sticky;
+		top: var(--article-sidebar-sticky-top);
 	}
 
 	.article-profile-avatar-frame {
@@ -280,7 +290,11 @@ const tocEntries = (toc ?? [])
 		gap: 0.9rem;
 		padding: 1rem;
 		position: sticky;
-		top: 6.2rem;
+		top: calc(
+			var(--article-sidebar-sticky-top) +
+			var(--article-profile-height) +
+			var(--article-sidebar-gap)
+		);
 	}
 
 	.article-toc-head {
@@ -473,6 +487,11 @@ const tocEntries = (toc ?? [])
 			position: static;
 			top: auto;
 			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+
+		.article-profile {
+			position: static;
+			top: auto;
 		}
 
 		.article-toc {
