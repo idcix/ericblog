@@ -354,7 +354,8 @@ describe("后台接口", () => {
 					"content-type": "application/json",
 					origin: "http://localhost",
 					"CF-Connecting-IP": "198.51.100.22",
-					"user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
+					"user-agent":
+						"Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
 				},
 				body: JSON.stringify({
 					sessionId: "sid_test_1234567890abcd",
@@ -673,6 +674,64 @@ describe("后台接口", () => {
 		);
 		assert.equal(blockedRes.status, 404);
 		assert.equal(await blockedRes.text(), "Not Found");
+	});
+
+	test("POST /mcp 在缺少会话头且未 initialize 时可走无会话兼容模式", async () => {
+		const { db, calls } = createMcpPostMockD1();
+		const createRequest = {
+			jsonrpc: "2.0",
+			id: 1,
+			method: "tools/call",
+			params: {
+				name: "create_post",
+				arguments: {
+					title: "无会话兼容模式测试",
+					content: "这是一次直接工具调用",
+					authorName: "AI-Agent",
+				},
+			},
+		};
+
+		const callRes = await app.request(
+			"/mcp",
+			{
+				method: "POST",
+				headers: {
+					accept: "application/json, text/event-stream",
+					"content-type": "application/json",
+					authorization: "Bearer mcp-secret",
+				},
+				body: JSON.stringify(createRequest),
+			},
+			{
+				...mockEnv,
+				DB: db,
+				MCP_BEARER_TOKEN: "mcp-secret",
+			} as unknown as Env,
+		);
+		assert.equal(callRes.status, 200);
+
+		const payload = (await callRes.json()) as {
+			result?: { isError?: boolean; content?: Array<{ text?: string }> };
+		};
+		assert.notEqual(payload?.result?.isError, true);
+		assert.match(
+			String(payload?.result?.content?.[0]?.text || ""),
+			/"authorName":\s*"AI-Agent"/u,
+		);
+
+		const insertCall = calls.find((entry) =>
+			/insert into\s+"?blog_posts"?/iu.test(entry.sql),
+		);
+		assert.ok(insertCall);
+		assert.ok(insertCall?.params.includes("无会话兼容模式测试"));
+
+		const auditInsertCall = calls.find(
+			(entry) =>
+				/insert into\s+"?mcp_audit_logs"?/iu.test(entry.sql) &&
+				entry.params.includes("无会话兼容模式处理成功"),
+		);
+		assert.ok(auditInsertCall);
 	});
 
 	test("POST /mcp 在 create_post 缺少 authorName 时返回工具错误", async () => {

@@ -254,6 +254,16 @@ function parseMcpJsonRpcMeta(body: unknown): McpJsonRpcMeta {
 	};
 }
 
+function toJsonRpcMessages(body: unknown): unknown[] {
+	return Array.isArray(body) ? body : [body];
+}
+
+function hasInitializeRequest(body: unknown): boolean {
+	return toJsonRpcMessages(body).some((message) =>
+		isInitializeRequest(message),
+	);
+}
+
 function getRequestPath(c: Context<AdminAppEnv>): string {
 	const parsedUrl = new URL(c.req.url);
 	const path = sanitizePlainText(parsedUrl.pathname, 255);
@@ -1381,6 +1391,35 @@ function createMcpServer(env: Env): McpServer {
 	return server;
 }
 
+async function handleStatelessMcpPostRequest(
+	c: Context<AdminAppEnv>,
+	parsedBody: unknown,
+): Promise<Response> {
+	const server = createMcpServer(c.env);
+	const transport = new WebStandardStreamableHTTPServerTransport({
+		sessionIdGenerator: undefined,
+		enableJsonResponse: true,
+	});
+
+	await server.connect(transport);
+	try {
+		return await transport.handleRequest(c.req.raw, {
+			parsedBody,
+		});
+	} finally {
+		try {
+			await transport.close();
+		} catch {
+			// 兼容模式下的清理失败不应影响请求响应
+		}
+		try {
+			await server.close();
+		} catch {
+			// 兼容模式下的清理失败不应影响请求响应
+		}
+	}
+}
+
 async function closeMcpSession(sessionId: string, state: McpSessionState) {
 	mcpSessions.delete(sessionId);
 	try {
@@ -1593,28 +1632,7 @@ mcpRoutes.all("/", async (c) => {
 
 			existing.updatedAt = Date.now();
 			transport = existing.transport;
-		} else {
-			if (!isInitializeRequest(parsedBody)) {
-				await recordMcpAuditLog(c.env, {
-					ip,
-					requestMethod: method,
-					requestPath,
-					sessionId,
-					responseStatus: 400,
-					authState: "authorized",
-					outcome: "invalid_request",
-					mcpMethod: requestMeta.mcpMethod,
-					toolName: requestMeta.toolName,
-					requestId: requestMeta.requestId,
-					detail: "首次请求必须为 initialize",
-					userAgent,
-				});
-				return c.json(
-					buildJsonRpcErrorPayload(-32000, "首次请求必须为 initialize"),
-					400,
-				);
-			}
-
+		} else if (hasInitializeRequest(parsedBody)) {
 			const server = createMcpServer(c.env);
 			const newTransport = new WebStandardStreamableHTTPServerTransport({
 				sessionIdGenerator: () => crypto.randomUUID(),
@@ -1639,6 +1657,51 @@ mcpRoutes.all("/", async (c) => {
 
 			await server.connect(newTransport);
 			transport = newTransport;
+		} else {
+			try {
+				const response = await handleStatelessMcpPostRequest(c, parsedBody);
+				await recordMcpAuditLog(c.env, {
+					ip,
+					requestMethod: method,
+					requestPath,
+					sessionId: null,
+					responseStatus: response.status,
+					authState: "authorized",
+					outcome: "success",
+					mcpMethod: requestMeta.mcpMethod,
+					toolName: requestMeta.toolName,
+					requestId: requestMeta.requestId,
+					detail:
+						response.status >= 400
+							? `无会话兼容模式返回状态 ${response.status}`
+							: "无会话兼容模式处理成功",
+					userAgent,
+				});
+				return response;
+			} catch (error) {
+				console.error("[MCP] 无会话兼容模式处理失败", error);
+				await recordMcpAuditLog(c.env, {
+					ip,
+					requestMethod: method,
+					requestPath,
+					sessionId: null,
+					responseStatus: 500,
+					authState: "authorized",
+					outcome: "internal_error",
+					mcpMethod: requestMeta.mcpMethod,
+					toolName: requestMeta.toolName,
+					requestId: requestMeta.requestId,
+					detail:
+						error instanceof Error
+							? sanitizePlainText(error.message, 500)
+							: "MCP 无会话兼容模式内部异常",
+					userAgent,
+				});
+				return c.json(
+					buildJsonRpcErrorPayload(-32603, "MCP 内部错误，请稍后重试"),
+					500,
+				);
+			}
 		}
 
 		try {

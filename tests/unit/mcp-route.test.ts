@@ -16,7 +16,7 @@ describe("MCP 发帖路由", () => {
 		assert.match(source, /authorName/u);
 		assert.match(source, /isMcpFeatureEnabled/u);
 		assert.match(source, /mcpEnabled/u);
-		assert.match(source, /首次请求必须为 initialize/u);
+		assert.match(source, /无会话兼容模式/u);
 		assert.match(source, /MCP_BEARER_TOKEN/u);
 		assert.match(source, /recordMcpAuditLog/u);
 		assert.match(source, /mcpAuditLogs/u);
