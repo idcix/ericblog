@@ -28,17 +28,6 @@ function formatDate(value) {
 	return parsed.toLocaleDateString();
 }
 
-function padDatePart(value) {
-	return String(value).padStart(2, "0");
-}
-
-function getTodayInputDate() {
-	const today = new Date();
-	return `${today.getFullYear()}-${padDatePart(today.getMonth() + 1)}-${padDatePart(
-		today.getDate(),
-	)}`;
-}
-
 function normalizeDateInput(value) {
 	const normalized = String(value ?? "").trim();
 	if (!normalized) {
@@ -137,12 +126,8 @@ function readSearchState(form) {
 				.filter(Boolean),
 		),
 	];
-	const today = getTodayInputDate();
-	const currentUrl = new URL(window.location.href);
-	const hasDateToInQuery = currentUrl.searchParams.has("dateTo");
 	let dateFrom = normalizeDateInput(formData.get("dateFrom"));
 	let dateTo = normalizeDateInput(formData.get("dateTo"));
-	dateTo = hasDateToInQuery ? dateTo || today : today;
 
 	if (dateFrom && dateTo && dateFrom > dateTo) {
 		[dateFrom, dateTo] = [dateTo, dateFrom];

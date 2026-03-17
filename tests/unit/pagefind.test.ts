@@ -16,12 +16,12 @@ describe("Pagefind 搜索集成", () => {
 		assert.ok(source.includes("Pagefind"));
 		assert.ok(searchComponentSource.includes('name="dateFrom"'));
 		assert.ok(searchComponentSource.includes('name="dateTo"'));
+		assert.ok(searchComponentSource.includes("search-date-panel"));
 		assert.ok(source.includes("selectedDateFrom"));
 		assert.ok(source.includes("selectedDateTo"));
 		assert.ok(searchScript.includes("搜索索引为空"));
 		assert.ok(searchScript.includes("history.pushState"));
 		assert.ok(searchScript.includes("buildSearchHref"));
-		assert.ok(searchScript.includes("getTodayInputDate"));
 		assert.ok(searchScript.includes("normalizeDateInput"));
 		assert.ok(searchScript.includes("toStartOfDayTimestamp"));
 		assert.ok(searchScript.includes("toEndOfDayExclusiveTimestamp"));

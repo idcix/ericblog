@@ -26,6 +26,10 @@ const {
 
 const selectedTagSet = new Set(selectedTags);
 const selectedTagItems = tags.filter((tag) => selectedTagSet.has(tag.slug));
+const hasDateFilter = Boolean(selectedDateFrom || selectedDateTo);
+const selectedDateLabel = hasDateFilter
+	? `${selectedDateFrom || "不限"} 至 ${selectedDateTo || "不限"}`
+	: "全部范围";
 ---
 
 <div class="search-container">
@@ -93,30 +97,38 @@ const selectedTagItems = tags.filter((tag) => selectedTagSet.has(tag.slug));
 			<div class="search-date-shell">
 				<div class="search-date-head">
 					<span class="search-date-head-label">时间范围</span>
-					<span class="search-date-hint">起始日期可留空，结束日期默认为今天</span>
+					<span class="search-date-hint">{selectedDateLabel}</span>
 				</div>
-				<div class="search-date-row">
-					<label class="search-date-field">
-						<span>从</span>
-						<input
-							type="date"
-							name="dateFrom"
-							class="search-date-input"
-							aria-label="起始日期"
-							value={selectedDateFrom}
-						/>
-					</label>
-					<label class="search-date-field">
-						<span>到</span>
-						<input
-							type="date"
-							name="dateTo"
-							class="search-date-input"
-							aria-label="结束日期"
-							value={selectedDateTo}
-						/>
-					</label>
-				</div>
+				<details class="search-date-panel">
+					<summary>
+						{hasDateFilter ? "调整时间范围（已设置）" : "展开选择时间范围"}
+					</summary>
+					<div class="search-date-body">
+						<p class="search-date-tip">起止日期都可留空；不填即按全部范围搜索。</p>
+						<div class="search-date-row">
+							<label class="search-date-field">
+								<span>从</span>
+								<input
+									type="date"
+									name="dateFrom"
+									class="search-date-input"
+									aria-label="起始日期"
+									value={selectedDateFrom}
+								/>
+							</label>
+							<label class="search-date-field">
+								<span>到</span>
+								<input
+									type="date"
+									name="dateTo"
+									class="search-date-input"
+									aria-label="结束日期"
+									value={selectedDateTo}
+								/>
+							</label>
+						</div>
+					</div>
+				</details>
 			</div>
 		</form>
 		<div id="search-results" class="search-results"></div>
@@ -242,6 +254,56 @@ const selectedTagItems = tags.filter((tag) => selectedTagSet.has(tag.slug));
 		}
 
 		.search-date-hint {
+			font-size: 0.78rem;
+			color: var(--color-text-muted);
+		}
+
+		.search-date-panel {
+			border: 1px solid rgba(255, 255, 255, 0.14);
+			border-radius: 0.9rem;
+			background: rgba(255, 255, 255, 0.04);
+			overflow: hidden;
+		}
+
+		.search-date-panel summary {
+			list-style: none;
+			cursor: pointer;
+			padding: 0.66rem 0.82rem;
+			font-size: 0.83rem;
+			color: var(--color-text-secondary);
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			user-select: none;
+		}
+
+		.search-date-panel summary::-webkit-details-marker {
+			display: none;
+		}
+
+		.search-date-panel summary::after {
+			content: "▾";
+			font-size: 0.75rem;
+			opacity: 0.85;
+			transition: transform var(--transition);
+		}
+
+		.search-date-panel[open] summary::after {
+			transform: rotate(180deg);
+		}
+
+		.search-date-panel[open] summary {
+			border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+		}
+
+		.search-date-body {
+			display: grid;
+			gap: 0.55rem;
+			padding: 0.68rem 0.82rem 0.82rem;
+		}
+
+		.search-date-tip {
+			margin: 0;
 			font-size: 0.78rem;
 			color: var(--color-text-muted);
 		}
