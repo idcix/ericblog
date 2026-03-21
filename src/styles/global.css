@@ -379,7 +379,7 @@ pre code {
 .footer-note,
 .footer-meta {
 	font-size: 0.9rem;
-	color: var(--color-text-muted);
+	color: var(--color-text-secondary);
 }
 
 .site-background {
@@ -633,7 +633,7 @@ html[data-theme-switching]::view-transition-new(root) {
 }
 
 .section-subheading {
-	color: var(--color-text-muted);
+	color: var(--color-text-secondary);
 	font-size: var(--font-size-sm);
 	line-height: 1.8;
 }
