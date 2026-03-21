@@ -416,6 +416,74 @@ describe("后台接口", () => {
 		assert.match(await res.text(), /本地或内网主机/u);
 	});
 
+	test("GET /friend-links/avatar 会拒绝重定向到本地地址", async () => {
+		const originalFetch = globalThis.fetch;
+		const sourceUrl = "https://avatar.example.com/redirect";
+
+		globalThis.fetch = async (input) => {
+			if (String(input) === sourceUrl) {
+				return new Response(null, {
+					status: 302,
+					headers: {
+						location: "http://127.0.0.1/internal-avatar.png",
+					},
+				});
+			}
+
+			return new Response("not found", { status: 404 });
+		};
+
+		try {
+			const res = await app.request(
+				`/friend-links/avatar?url=${encodeURIComponent(sourceUrl)}`,
+				undefined,
+				{
+					...mockEnv,
+					DB: createMockD1().db,
+				} as unknown as Env,
+			);
+
+			assert.equal(res.status, 400);
+			assert.match(await res.text(), /本地或内网主机/u);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
+	test("GET /friend-links/avatar 会拒绝 SVG 头像资源", async () => {
+		const originalFetch = globalThis.fetch;
+		const sourceUrl = "https://avatar.example.com/avatar.svg";
+
+		globalThis.fetch = async (input) => {
+			if (String(input) === sourceUrl) {
+				return new Response('<svg xmlns="http://www.w3.org/2000/svg"></svg>', {
+					status: 200,
+					headers: {
+						"content-type": "image/svg+xml",
+					},
+				});
+			}
+
+			return new Response("not found", { status: 404 });
+		};
+
+		try {
+			const res = await app.request(
+				`/friend-links/avatar?url=${encodeURIComponent(sourceUrl)}`,
+				undefined,
+				{
+					...mockEnv,
+					DB: createMockD1().db,
+				} as unknown as Env,
+			);
+
+			assert.equal(res.status, 415);
+			assert.match(await res.text(), /仅允许 JPG、PNG、WEBP、AVIF、GIF/u);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
 	test("POST /ai/chat 会拒绝跨站来源请求", async () => {
 		const res = await app.request(
 			"/ai/chat",
@@ -427,6 +495,25 @@ describe("后台接口", () => {
 				},
 				body: JSON.stringify({
 					message: "你好",
+				}),
+			},
+			mockEnv,
+		);
+
+		assert.equal(res.status, 403);
+		assert.match(await res.text(), /非法来源请求/u);
+	});
+
+	test("POST /ai/terminal-404 缺少来源头会拒绝请求", async () => {
+		const res = await app.request(
+			"/ai/terminal-404",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					message: "pwd",
 				}),
 			},
 			mockEnv,

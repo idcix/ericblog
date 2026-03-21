@@ -11,6 +11,12 @@
   - 白盒审计（认证授权、输入校验、SSRF、XSS、依赖风险、限流策略）
   - 依赖漏洞扫描（`npm audit --omit=dev --registry=https://registry.npmjs.org --json`）
 
+## 整改状态（2026-03-22）
+
+- 已完成修复：F-01（头像代理 SSRF/SVG）、F-02（依赖漏洞）、F-03（公开 AI 同源与人机校验）、F-04（JWT 密钥强度校验）。
+- 已验证：`npm audit --omit=dev --registry=https://registry.npmjs.org` 输出 `found 0 vulnerabilities`。
+- 待选优化：F-05（健康检查最小化）可按运维需求决定是否收敛。
+
 ## 结论摘要
 
 整体安全基线较好（后台鉴权、CSRF、防护头、Markdown 安全渲染均到位），但存在 **1 个高优先级问题** 和 **若干中低优先级风险**，建议先修复头像代理相关问题，再处理依赖升级与公开 AI 端点风控。

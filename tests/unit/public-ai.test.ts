@@ -7,6 +7,7 @@ describe("公开 AI 接口防护", () => {
 		const source = await readFile("src/admin/routes/public-ai.ts", "utf8");
 
 		assert.match(source, /isSameOriginRequest/u);
+		assert.match(source, /if \(!origin\) \{\s*return false;/u);
 		assert.match(source, /public-ai:minute:/u);
 		assert.match(source, /public-ai:day:/u);
 		assert.match(source, /PUBLIC_AI_RATE_LIMIT_PER_MINUTE/u);
@@ -27,7 +28,14 @@ describe("公开 AI 接口防护", () => {
 		assert.match(source, /MAX_TERMINAL_BODY_LENGTH/u);
 		assert.match(source, /MAX_TERMINAL_HISTORY_MESSAGE_LENGTH/u);
 		assert.match(source, /history/u);
-		assert.match(source, /不得误判为无效：help、whoami、pwd、ls、uname、clear、cls/u);
+		assert.match(
+			source,
+			/publicAiRoutes\.post\("\/terminal-404"[\s\S]*requireTurnstile:\s*true/u,
+		);
+		assert.match(
+			source,
+			/不得误判为无效：help、whoami、pwd、ls、uname、clear、cls/u,
+		);
 		assert.match(source, /若命令为 clear 或 cls，只返回：TERMINAL_CLEAR/u);
 		assert.match(source, /输入：guest@404:~\$ pwd/u);
 		assert.match(source, /输入：guest@404:~\$ ls/u);

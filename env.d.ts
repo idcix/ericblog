@@ -1,7 +1,5 @@
 /// <reference types="astro/client" />
 
-type Runtime = import("@astrojs/cloudflare").Runtime<Env>;
-
 interface Env {
 	DB: D1Database;
 	MEDIA_BUCKET: R2Bucket;
@@ -34,5 +32,10 @@ interface Env {
 }
 
 declare namespace App {
-	interface Locals extends Runtime {}
+	interface Locals {
+		runtime: {
+			env: Env;
+		};
+		cfContext: ExecutionContext;
+	}
 }

@@ -7,6 +7,7 @@ const SESSION_TTL_SECONDS = 12 * 60 * 60;
 const SESSION_PREFIX = "admin-session:";
 const SESSION_ISSUER = "cf-astro-blog-starter-admin";
 const SESSION_AUDIENCE = "admin";
+const MIN_JWT_SECRET_LENGTH = 32;
 
 export interface AdminSession {
 	id: string;
@@ -59,7 +60,13 @@ function getSessionStorageKey(sessionId: string): string {
 }
 
 function getJwtSecret(jwtSecret: string): Uint8Array {
-	return new TextEncoder().encode(jwtSecret);
+	const normalized = String(jwtSecret ?? "").trim();
+	if (normalized.length < MIN_JWT_SECRET_LENGTH) {
+		throw new Error(
+			`JWT_SECRET 长度不足，至少 ${MIN_JWT_SECRET_LENGTH} 个字符`,
+		);
+	}
+	return new TextEncoder().encode(normalized);
 }
 
 function getAdminGitHubLogin(env: Env): string {

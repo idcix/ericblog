@@ -123,7 +123,7 @@ function getClientIp(c: Context<AdminAppEnv>): string {
 function isSameOriginRequest(c: Context<AdminAppEnv>): boolean {
 	const origin = c.req.header("origin");
 	if (!origin) {
-		return true;
+		return false;
 	}
 
 	try {
@@ -239,7 +239,9 @@ interface ParsedTerminalCommandInput {
 	command: string;
 }
 
-function parseTerminalCommandInput(content: string): ParsedTerminalCommandInput | null {
+function parseTerminalCommandInput(
+	content: string,
+): ParsedTerminalCommandInput | null {
 	const normalized = String(content ?? "").replaceAll("\r", "");
 	const lines = normalized.split("\n");
 	if (lines.length < 2) {
@@ -267,7 +269,9 @@ function parseTerminalCommandInput(content: string): ParsedTerminalCommandInput 
 }
 
 function normalizeTerminalCommandForTranscript(command: string): string {
-	return String(command ?? "").replaceAll(/\s+/g, " ").trim();
+	return String(command ?? "")
+		.replaceAll(/\s+/g, " ")
+		.trim();
 }
 
 function buildTerminalTranscriptUserMessage(
@@ -300,7 +304,9 @@ function buildTerminalTranscriptUserMessage(
 		}
 	}
 
-	const currentInput = parseTerminalCommandInput(buildTerminalUserContent(cwd, command));
+	const currentInput = parseTerminalCommandInput(
+		buildTerminalUserContent(cwd, command),
+	);
 	if (currentInput) {
 		lines.push(
 			`guest@404:${currentInput.cwd}$ ${normalizeTerminalCommandForTranscript(currentInput.command)}`,
@@ -545,7 +551,7 @@ publicAiRoutes.post("/chat", async (c) =>
 
 publicAiRoutes.post("/terminal-404", async (c) =>
 	handlePublicAiRequest(c, {
-		requireTurnstile: false,
+		requireTurnstile: true,
 		systemPrompt: NOT_FOUND_TERMINAL_SYSTEM_PROMPT,
 		temperature: 0.35,
 		maxTokens: 500,

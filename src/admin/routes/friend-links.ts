@@ -10,6 +10,14 @@ const friendLinksRoutes = new Hono<AdminAppEnv>();
 const AVATAR_PROXY_TIMEOUT_MS = 8_000;
 const AVATAR_PROXY_MAX_BYTES = 2 * 1024 * 1024;
 const AVATAR_PROXY_CACHE_SECONDS = 6 * 60 * 60;
+const AVATAR_PROXY_MAX_REDIRECTS = 3;
+const AVATAR_PROXY_ALLOWED_CONTENT_TYPES = new Set([
+	"image/jpeg",
+	"image/png",
+	"image/webp",
+	"image/avif",
+	"image/gif",
+]);
 
 interface FriendLinkApplicationInput {
 	name: string;
@@ -123,6 +131,22 @@ function validateAvatarTarget(target: URL, requestUrl: URL): string | null {
 	}
 
 	return null;
+}
+
+function isRedirectStatus(status: number): boolean {
+	return [301, 302, 303, 307, 308].includes(status);
+}
+
+function parseAvatarContentType(contentType: string | null): string {
+	const normalized =
+		sanitizePlainText(contentType, 120).toLowerCase() ||
+		"application/octet-stream";
+	const [mediaType] = normalized.split(";");
+	return (mediaType || "").trim();
+}
+
+function isAllowedAvatarContentType(contentType: string): boolean {
+	return AVATAR_PROXY_ALLOWED_CONTENT_TYPES.has(contentType);
 }
 
 function getBodyText(body: Record<string, unknown>, key: string): string {
@@ -299,9 +323,10 @@ friendLinksRoutes.get("/avatar", async (c) => {
 		return c.text("头像地址不合法", 400);
 	}
 
-	const validateError = validateAvatarTarget(targetUrl, new URL(c.req.url));
-	if (validateError) {
-		return c.text(validateError, 400);
+	const requestUrl = new URL(c.req.url);
+	const initialValidateError = validateAvatarTarget(targetUrl, requestUrl);
+	if (initialValidateError) {
+		return c.text(initialValidateError, 400);
 	}
 
 	const controller = new AbortController();
@@ -310,41 +335,79 @@ friendLinksRoutes.get("/avatar", async (c) => {
 	}, AVATAR_PROXY_TIMEOUT_MS);
 
 	try {
-		const response = await fetch(targetUrl.toString(), {
-			method: "GET",
-			headers: {
-				accept:
-					"image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-				"user-agent": "cf-astro-blog-friend-avatar-proxy/1.0",
-			},
-			redirect: "follow",
-			signal: controller.signal,
-		});
-		if (!response.ok) {
-			return c.text("头像暂时不可用", 502);
-		}
+		let currentUrl = new URL(targetUrl.toString());
 
-		const contentType =
-			sanitizePlainText(
+		for (
+			let redirectCount = 0;
+			redirectCount <= AVATAR_PROXY_MAX_REDIRECTS;
+			redirectCount += 1
+		) {
+			const validateError = validateAvatarTarget(currentUrl, requestUrl);
+			if (validateError) {
+				return c.text(validateError, 400);
+			}
+
+			const response = await fetch(currentUrl.toString(), {
+				method: "GET",
+				headers: {
+					accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+					"user-agent": "cf-astro-blog-friend-avatar-proxy/1.0",
+				},
+				redirect: "manual",
+				signal: controller.signal,
+			});
+
+			if (isRedirectStatus(response.status)) {
+				const location = response.headers.get("location");
+				if (!location) {
+					return c.text("头像重定向地址无效", 400);
+				}
+
+				let nextUrl: URL;
+				try {
+					nextUrl = new URL(location, currentUrl);
+				} catch {
+					return c.text("头像重定向地址无效", 400);
+				}
+
+				const redirectValidateError = validateAvatarTarget(nextUrl, requestUrl);
+				if (redirectValidateError) {
+					return c.text(redirectValidateError, 400);
+				}
+
+				currentUrl = nextUrl;
+				continue;
+			}
+
+			if (!response.ok) {
+				return c.text("头像暂时不可用", 502);
+			}
+
+			const contentType = parseAvatarContentType(
 				response.headers.get("content-type"),
-				120,
-			).toLowerCase() || "application/octet-stream";
-		if (!contentType.startsWith("image/")) {
-			return c.text("头像资源类型不支持", 415);
+			);
+			if (!isAllowedAvatarContentType(contentType)) {
+				return c.text(
+					"头像资源类型不支持，仅允许 JPG、PNG、WEBP、AVIF、GIF",
+					415,
+				);
+			}
+
+			const data = await response.arrayBuffer();
+			if (data.byteLength > AVATAR_PROXY_MAX_BYTES) {
+				return c.text("头像文件过大", 413);
+			}
+
+			return new Response(data, {
+				headers: {
+					"content-type": contentType,
+					"cache-control": `public, max-age=${AVATAR_PROXY_CACHE_SECONDS}, stale-while-revalidate=86400`,
+					"x-content-type-options": "nosniff",
+				},
+			});
 		}
 
-		const data = await response.arrayBuffer();
-		if (data.byteLength > AVATAR_PROXY_MAX_BYTES) {
-			return c.text("头像文件过大", 413);
-		}
-
-		return new Response(data, {
-			headers: {
-				"content-type": contentType,
-				"cache-control": `public, max-age=${AVATAR_PROXY_CACHE_SECONDS}, stale-while-revalidate=86400`,
-				"x-content-type-options": "nosniff",
-			},
-		});
+		return c.text("头像重定向次数过多", 400);
 	} catch {
 		return c.text("头像拉取失败", 502);
 	} finally {

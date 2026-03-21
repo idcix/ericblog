@@ -1,7 +1,12 @@
 import { type Context, Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import { getDb } from "@/lib/db";
 import { timingSafeEqualText } from "@/lib/password";
 import { sanitizePlainText } from "@/lib/security";
+import {
+	buildBackgroundImageUrl,
+	getSiteAppearance,
+} from "@/lib/site-appearance";
 import {
 	type AdminAppEnv,
 	assertCsrfToken,
@@ -20,11 +25,6 @@ import {
 	recordFailedAttempt,
 } from "../middleware/rate-limit";
 import { loginPage } from "../views/login";
-import { getDb } from "@/lib/db";
-import {
-	buildBackgroundImageUrl,
-	getSiteAppearance,
-} from "@/lib/site-appearance";
 
 const auth = new Hono<AdminAppEnv>();
 const OAUTH_STATE_COOKIE = "admin_oauth_state";
@@ -357,7 +357,21 @@ auth.get("/github/callback", async (c) => {
 	}
 
 	const session = await createSession(c.env, profile.login);
-	const token = await createToken(c.env, session);
+	let token: string;
+	try {
+		token = await createToken(c.env, session);
+	} catch (error) {
+		console.error("admin_token_create_failed", error);
+		await destroySession(c.env, session.id);
+		await recordOAuthFailure(c);
+		return c.html(
+			loginPage({
+				error: "后台会话配置异常，请联系站点管理员检查 JWT_SECRET",
+				oauthEnabled: true,
+			}),
+			503,
+		);
+	}
 	setCookie(c, "admin_session", token, {
 		...getSessionCookieOptions(c.req.url),
 	});
