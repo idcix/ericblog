@@ -216,29 +216,6 @@ export const adminSharedStyles = `
 			gap: 1rem;
 		}
 
-		.sidebar-brand {
-			position: relative;
-			padding: 1rem 1.15rem;
-			border-radius: calc(var(--radius-lg) - 8px);
-			background: var(--bg-tertiary);
-			border: 1px solid var(--border);
-			box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
-		}
-
-		.sidebar-brand-title {
-			font-size: 1.2rem;
-			font-weight: 700;
-			letter-spacing: -0.03em;
-		}
-
-		.sidebar-brand-note {
-			margin-top: 0.35rem;
-			color: var(--text-muted);
-			font-size: 0.82rem;
-			line-height: 1.5;
-			letter-spacing: 0.02em;
-		}
-
 		.sidebar-nav {
 			display: grid;
 			gap: 0.55rem;
@@ -1466,10 +1443,6 @@ ${adminSharedStyles}
 	<div class="admin-shell">
 		<aside class="sidebar">
 			<div class="sidebar-panel">
-				<div class="sidebar-brand">
-					<div class="sidebar-brand-title">管理后台</div>
-					<p class="sidebar-brand-note">主页同款视觉</p>
-				</div>
 				<nav class="sidebar-nav">
 					${renderNav(title)}
 				</nav>
