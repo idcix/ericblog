@@ -287,6 +287,64 @@ describe("源码回归保护", () => {
 		assert.ok(globalStyleSource.includes(".prose .prose-code-block pre"));
 	});
 
+	test("全局字体配置会加载文楷与分层英文字体", async () => {
+		const [globalStyleSource, packageSource] = await Promise.all([
+			readFile("src/styles/global.css", "utf8"),
+			readFile("package.json", "utf8"),
+		]);
+		const dependencies =
+			(
+				JSON.parse(packageSource) as {
+					dependencies?: Record<string, string>;
+				}
+			).dependencies ?? {};
+
+		assert.ok(dependencies["lxgw-wenkai-webfont"]);
+		assert.ok(dependencies["@fontsource-variable/lora"]);
+		assert.ok(dependencies["@fontsource/cormorant-garamond"]);
+		assert.ok(dependencies["@fontsource/shippori-mincho"]);
+		assert.ok(dependencies["@fontsource/space-grotesk"]);
+		assert.ok(
+			globalStyleSource.includes(
+				'@import "@fontsource-variable/lora/wght.css";',
+			),
+		);
+		assert.ok(
+			globalStyleSource.includes(
+				'@import "@fontsource-variable/lora/wght-italic.css";',
+			),
+		);
+		assert.ok(
+			globalStyleSource.includes(
+				'@import "@fontsource/cormorant-garamond/500-italic.css";',
+			),
+		);
+		assert.ok(
+			globalStyleSource.includes(
+				'@import "@fontsource/shippori-mincho/400.css";',
+			),
+		);
+		assert.ok(
+			globalStyleSource.includes(
+				'@import "@fontsource/shippori-mincho/700.css";',
+			),
+		);
+		assert.ok(
+			globalStyleSource.includes(
+				'@import "@fontsource/space-grotesk/700.css";',
+			),
+		);
+		assert.ok(globalStyleSource.includes('--font-serif-body: "Lora Variable"'));
+		assert.ok(globalStyleSource.includes("--font-serif-em:"));
+		assert.ok(globalStyleSource.includes('"Cormorant Garamond"'));
+		assert.ok(globalStyleSource.includes('--font-strong: "Space Grotesk"'));
+		assert.ok(globalStyleSource.includes("body {"));
+		assert.ok(globalStyleSource.includes(".prose p {"));
+		assert.ok(globalStyleSource.includes(".prose blockquote {"));
+		assert.ok(globalStyleSource.includes(".prose em {"));
+		assert.ok(globalStyleSource.includes(".prose strong {"));
+	});
+
 	test("后台文章变更会触发可选部署钩子", async () => {
 		const [postRouteSource, deployHookSource, workflowSource] =
 			await Promise.all([
