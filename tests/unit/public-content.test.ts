@@ -155,6 +155,26 @@ describe("源码回归保护", () => {
 		assert.ok(friendsSource.includes('href="/friends/apply"'));
 		assert.ok(!friendsSource.includes('action="/api/friend-links/apply"'));
 		assert.ok(applyPageSource.includes('action="/api/friend-links/apply"'));
+		assert.ok(
+			friendsSource.includes(
+				"--glass-panel-opacity: calc(var(--hero-card-opacity, 14) / 100);",
+			),
+		);
+		assert.ok(
+			friendsSource.includes(
+				"--glass-panel-blur: var(--hero-card-blur, 18px);",
+			),
+		);
+		assert.ok(
+			applyPageSource.includes(
+				"--glass-panel-opacity: calc(var(--hero-card-opacity, 14) / 100);",
+			),
+		);
+		assert.ok(
+			applyPageSource.includes(
+				"--glass-panel-blur: var(--hero-card-blur, 18px);",
+			),
+		);
 		assert.ok(applyPageSource.includes("站点简介（可选）"));
 		assert.doesNotMatch(
 			applyPageSource,

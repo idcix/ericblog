@@ -113,6 +113,13 @@ try {
 </Base>
 
 <style>
+	.friends-hero,
+	.friends-list,
+	.friend-apply-entry {
+		--glass-panel-opacity: calc(var(--hero-card-opacity, 14) / 100);
+		--glass-panel-blur: var(--hero-card-blur, 18px);
+	}
+
 	.friends-hero {
 		display: grid;
 		gap: 1rem;
