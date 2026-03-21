@@ -125,6 +125,14 @@ describe("源码回归保护", () => {
 		assert.match(terminalScriptSource, /window\.localStorage/u);
 		assert.match(terminalScriptSource, /buildTerminalHistoryMessage/u);
 		assert.match(terminalScriptSource, /normalizeTerminalPath/u);
+		assert.match(
+			terminalScriptSource,
+			/command\.toLowerCase\(\)\s*===\s*"clear"\s*\|\|\s*command\.toLowerCase\(\)\s*===\s*"cls"[\s\S]*terminalState\.history\s*=\s*\[\]/u,
+		);
+		assert.match(
+			terminalScriptSource,
+			/reply\s*===\s*"TERMINAL_CLEAR"[\s\S]*terminalState\.history\s*=\s*\[\]/u,
+		);
 		assert.match(terminalScriptSource, /astro:page-load/u);
 	});
 

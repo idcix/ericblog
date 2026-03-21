@@ -296,6 +296,7 @@ function initNotFoundTerminal() {
 		if (command.toLowerCase() === "clear" || command.toLowerCase() === "cls") {
 			logNode.innerHTML = "";
 			terminalState.entries = [];
+			terminalState.history = [];
 			appendTerminalLineWithState(
 				logNode,
 				terminalState,
@@ -353,6 +354,7 @@ function initNotFoundTerminal() {
 			if (reply === "TERMINAL_CLEAR") {
 				logNode.innerHTML = "";
 				terminalState.entries = [];
+				terminalState.history = [];
 				appendTerminalLineWithState(logNode, terminalState, "终端已清屏。", "system");
 				writeTerminalSession(terminalState);
 				return;
