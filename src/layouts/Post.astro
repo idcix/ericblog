@@ -112,15 +112,17 @@ const hasToc = tocEntries.length > 0;
 								取消透明度
 							</button>
 						</div>
+						<div class="article-toc-body">
 						<ol class="article-toc-list">
 							{tocEntries.map((item) => (
 								<li class={`article-toc-item level-${item.level}`}>
-								<a href={`#${item.id}`} class="article-toc-link">
-									{item.text}
-								</a>
-							</li>
-						))}
-					</ol>
+									<a href={`#${item.id}`} class="article-toc-link" data-toc-id={item.id}>
+										{item.text}
+									</a>
+								</li>
+							))}
+						</ol>
+					</div>
 				</nav>
 			)}
 		</aside>
@@ -187,7 +189,7 @@ const hasToc = tocEntries.length > 0;
 	}
 
 	.article-sidebar {
-		--article-sidebar-sticky-top: 6.2rem;
+		--article-sidebar-sticky-top: 6.5rem;
 		--article-sidebar-gap: 0.8rem;
 		--article-profile-height: 0px;
 		--article-profile-shift: 0px;
@@ -392,9 +394,12 @@ const hasToc = tocEntries.length > 0;
 		font-weight: 550;
 	}
 
-	/* slot 内容由父组件注入，Astro scoped 选择器无法直接匹配，需用 :global() */
-	:global(.article-prose) :is(h1, h2, h3, h4, h5, h6)[id] {
-		scroll-margin-top: 6.2rem;
+	/*
+	 * slot 内容由父组件注入，子代选择器在 Astro scoped CSS 中仍会附加 [data-astro-cid]
+	 * 必须将整个选择器包在 :global() 内才能匹配 slot 插入的标题元素
+	 */
+	:global(.article-prose :is(h1, h2, h3, h4, h5, h6)[id]) {
+		scroll-margin-top: 6.5rem;
 	}
 
 	.article-hero,
