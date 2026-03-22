@@ -17,8 +17,8 @@
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "blog",
-			"database_id": "30838030-7437-4cb6-b618-7eabe62144da",
+			"database_name": "blogericterminal",
+			"database_id": "730c5072-097c-4c8d-a374-f3fa44b0a13a",
 			"migrations_dir": "drizzle"
 		}
 	],
@@ -26,21 +26,20 @@
 	"r2_buckets": [
 		{
 			"binding": "MEDIA_BUCKET",
-			"bucket_name": "blog-media"
+			"bucket_name": "blogericterminal-media"
 		}
 	],
 
 	"kv_namespaces": [
 		{
 			"binding": "SESSION",
-			"id": "ee2c404dd676463d93bea249decdc0ac"
+			"id": "fb078be8cdf94bc585178f3db5d18570"
 		}
 	],
 
 	"vars": {
-		"SITE_NAME": "My Blog",
-		"SITE_URL": "https://blog.ericterminal.com",
-		"TURNSTILE_SITE_KEY": "0x4AAAAAACnxh79QQawnz9UI"
+		"SITE_NAME": "妙妙的博客",
+		"SITE_URL": "https://ericblog.260.workers.dev"
 	}
 
 	// 机密变量可通过 `wrangler secret put` 或本地 `.dev.vars` 配置
