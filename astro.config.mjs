@@ -13,7 +13,7 @@ export default defineConfig({
 			enabled: true,
 		},
 	}),
-	site: "https://blog.ericterminal.com",
+	site: "https://ericblog.260.workers.dev",
 	vite: {
 		resolve: {
 			alias: {
