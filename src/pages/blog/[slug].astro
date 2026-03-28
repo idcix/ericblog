@@ -4,6 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { blogCategories, blogPosts } from "@/db/schema";
 import Post from "@/layouts/Post.astro";
 import { getDb } from "@/lib/db";
+import { estimateArticleReadStats } from "@/lib/format";
 import { getPublicPostBySlugCondition } from "@/lib/public-content";
 import { renderSafeMarkdownWithToc, sanitizePlainText } from "@/lib/security";
 import {
@@ -165,6 +166,7 @@ if (!post) {
 const { html: htmlContent, toc } = await renderSafeMarkdownWithToc(
 	post.content,
 );
+const readingStats = estimateArticleReadStats(post.content);
 const featuredImageUrl = post.featuredImageKey
 	? `/media/${post.featuredImageKey}`
 	: undefined;
@@ -199,6 +201,9 @@ const postBackgroundOverride = postBackgroundImageKey
 	articleSidebarName={siteAppearance.articleSidebarName}
 	articleSidebarBadge={siteAppearance.articleSidebarBadge}
 	articleSidebarBio={siteAppearance.articleSidebarBio}
+	cjkCharCount={readingStats.cjkCharCount}
+	latinWordCount={readingStats.latinWordCount}
+	estimatedReadingMinutes={readingStats.estimatedReadingMinutes}
 	backgroundOverride={postBackgroundOverride}
 	toc={toc}
 >
