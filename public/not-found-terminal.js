@@ -85,6 +85,7 @@ function readTerminalSession() {
 		entries: [],
 		history: [],
 		lastPath: null,
+		currentCwd: null,
 	};
 
 	try {
@@ -106,11 +107,14 @@ function readTerminalSession() {
 			: [];
 		const lastPathRaw = String(parsed?.lastPath ?? "").trim();
 		const lastPath = lastPathRaw ? normalizeTerminalPath(lastPathRaw) : null;
+		const currentCwdRaw = String(parsed?.currentCwd ?? "").trim();
+		const currentCwd = currentCwdRaw ? normalizeTerminalPath(currentCwdRaw) : null;
 
 		return {
 			entries,
 			history,
 			lastPath,
+			currentCwd,
 		};
 	} catch {
 		return fallback;
@@ -125,6 +129,7 @@ function writeTerminalSession(state) {
 				entries: state.entries,
 				history: state.history,
 				lastPath: state.lastPath,
+				currentCwd: state.currentCwd || null,
 			}),
 		);
 	} catch {}
@@ -205,8 +210,7 @@ function initNotFoundTerminal() {
 	const promptNode = root.querySelector(".terminal-prompt");
 	const aiEndpoint = root.dataset.aiEndpoint || "/api/ai/terminal-404";
 	const missingPath = root.dataset.missingPath || "/";
-	const cwd = normalizeTerminalPath(missingPath);
-	const promptPrefix = `guest@404:${cwd}$`;
+	const missingCwd = normalizeTerminalPath(missingPath);
 
 	if (
 		!(logNode instanceof HTMLElement) ||
@@ -216,11 +220,14 @@ function initNotFoundTerminal() {
 		return;
 	}
 
+	const terminalState = readTerminalSession();
+	let cwd = terminalState.currentCwd || missingCwd;
+	let promptPrefix = `guest@404:${cwd}$`;
+
 	if (promptNode instanceof HTMLElement) {
 		promptNode.textContent = promptPrefix;
 	}
 
-	const terminalState = readTerminalSession();
 	if (terminalState.entries.length > 0) {
 		renderTerminalEntries(logNode, terminalState.entries);
 	} else {
@@ -230,7 +237,7 @@ function initNotFoundTerminal() {
 	if (
 		terminalState.entries.length > 0 &&
 		terminalState.lastPath &&
-		terminalState.lastPath !== cwd
+		terminalState.lastPath !== missingCwd
 	) {
 		appendTerminalLineWithState(
 			logNode,
@@ -240,7 +247,8 @@ function initNotFoundTerminal() {
 		);
 	}
 
-	terminalState.lastPath = cwd;
+	terminalState.lastPath = missingCwd;
+	terminalState.currentCwd = cwd;
 	if (terminalState.entries.length === 0) {
 		appendTerminalLineWithState(
 			logNode,
@@ -341,26 +349,56 @@ function initNotFoundTerminal() {
 			}
 
 			const reply = String(payload?.reply ?? "").trim();
-			const outputText = reply || "(无输出)";
+			const terminalPayload =
+				payload?.terminal && typeof payload.terminal === "object"
+					? payload.terminal
+					: null;
+			const nextCwdRaw =
+				terminalPayload && typeof terminalPayload.nextCwd === "string"
+					? terminalPayload.nextCwd
+					: "";
+			const nextCwd = nextCwdRaw ? normalizeTerminalPath(nextCwdRaw) : "";
+			const clearByPayload = Boolean(terminalPayload?.clear);
+			const isCdCommand = /^cd(?:\s+.+)?$/iu.test(command);
+			const commandCwd = cwd;
+
+			if (nextCwd && nextCwd !== commandCwd) {
+				cwd = nextCwd;
+				promptPrefix = `guest@404:${cwd}$`;
+				terminalState.currentCwd = cwd;
+				if (promptNode instanceof HTMLElement) {
+					promptNode.textContent = promptPrefix;
+				}
+			}
+
+			const outputText = reply
+				? reply
+				: isCdCommand
+					? ""
+					: "(无输出)";
 			terminalState.history.push({
 				role: "user",
-				content: buildTerminalHistoryMessage(cwd, command),
+				content: buildTerminalHistoryMessage(commandCwd, command),
 			});
 			terminalState.history.push({
 				role: "assistant",
 				content: outputText,
 			});
 
-			if (reply === "TERMINAL_CLEAR") {
+			if (clearByPayload || reply === "TERMINAL_CLEAR") {
 				logNode.innerHTML = "";
 				terminalState.entries = [];
 				terminalState.history = [];
 				appendTerminalLineWithState(logNode, terminalState, "终端已清屏。", "system");
+				terminalState.currentCwd = cwd;
 				writeTerminalSession(terminalState);
 				return;
 			}
 
-			appendTerminalBlockWithState(logNode, terminalState, outputText, "output");
+			if (outputText) {
+				appendTerminalBlockWithState(logNode, terminalState, outputText, "output");
+			}
+			terminalState.currentCwd = cwd;
 			writeTerminalSession(terminalState);
 		} catch (error) {
 			logNode.lastElementChild?.remove();
