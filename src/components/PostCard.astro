@@ -93,6 +93,8 @@ const articleReadingTimeLabel = `约 ${safeEstimatedReadingMinutes.toLocaleStrin
 					</time>
 				)}
 				{categoryName && <span class="pill">{categoryName}</span>}
+				<span class="pill">{articleLengthLabel}</span>
+				<span class="pill">{articleReadingTimeLabel}</span>
 			</div>
 			<a href={`/blog/${slug}`} class="post-card-link">
 				<h2 class="post-card-title" transition:name={`title-${slug}`}>{title}</h2>
@@ -104,11 +106,7 @@ const articleReadingTimeLabel = `约 ${safeEstimatedReadingMinutes.toLocaleStrin
 			</p>
 		)}
 		<div class="post-card-meta">
-			<div class="post-card-meta-main">
-				<span>{authorName || siteConfig.author}</span>
-				<span class="post-card-reading-metric">{articleLengthLabel}</span>
-				<span class="post-card-reading-metric">{articleReadingTimeLabel}</span>
-			</div>
+			<span>{authorName || siteConfig.author}</span>
 			<a href={`/blog/${slug}`} class="post-card-readmore">继续阅读</a>
 		</div>
 	</div>
