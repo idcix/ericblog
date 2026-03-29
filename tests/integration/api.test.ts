@@ -450,13 +450,14 @@ describe("后台接口", () => {
 		}
 	});
 
-	test("GET /friend-links/avatar 会拒绝 SVG 头像资源", async () => {
+	test("GET /friend-links/avatar 允许 SVG 头像资源", async () => {
 		const originalFetch = globalThis.fetch;
 		const sourceUrl = "https://avatar.example.com/avatar.svg";
+		const svgBody = '<svg xmlns="http://www.w3.org/2000/svg"></svg>';
 
 		globalThis.fetch = async (input) => {
 			if (String(input) === sourceUrl) {
-				return new Response('<svg xmlns="http://www.w3.org/2000/svg"></svg>', {
+				return new Response(svgBody, {
 					status: 200,
 					headers: {
 						"content-type": "image/svg+xml",
@@ -477,8 +478,9 @@ describe("后台接口", () => {
 				} as unknown as Env,
 			);
 
-			assert.equal(res.status, 415);
-			assert.match(await res.text(), /仅允许 JPG、PNG、WEBP、AVIF、GIF/u);
+			assert.equal(res.status, 200);
+			assert.equal(res.headers.get("content-type"), "image/svg+xml");
+			assert.equal(await res.text(), svgBody);
 		} finally {
 			globalThis.fetch = originalFetch;
 		}
@@ -1050,6 +1052,14 @@ describe("后台接口", () => {
 			String(payload?.result?.content?.[0]?.text || ""),
 			/"status":\s*"published"/u,
 		);
+		assert.match(
+			String(payload?.result?.content?.[0]?.text || ""),
+			/"slug":\s*"mcp-发布测试"/u,
+		);
+		assert.match(
+			String(payload?.result?.content?.[0]?.text || ""),
+			/"url":\s*"\/blog\/mcp-%E5%8F%91%E5%B8%83%E6%B5%8B%E8%AF%95"/u,
+		);
 
 		const insertCall = calls.find((entry) =>
 			/insert into\s+"?blog_posts"?/iu.test(entry.sql),
@@ -1118,6 +1128,7 @@ describe("后台接口", () => {
 					title: "MCP 字段兼容测试",
 					content: "测试正文",
 					authorName: "AI-Agent",
+					pathName: "在-ucg-fiber-上优雅地使用-softbank-10g",
 					summary: "这是一段摘要",
 					category: { name: "工程实践" },
 					tags: [{ name: "MCP" }, { label: "SEO" }],
@@ -1159,6 +1170,9 @@ describe("后台接口", () => {
 			/insert into\s+"?blog_posts"?/iu.test(entry.sql),
 		);
 		assert.ok(postInsertCall);
+		assert.ok(
+			postInsertCall?.params.includes("在-ucg-fiber-上优雅地使用-softbank-10g"),
+		);
 		assert.ok(postInsertCall?.params.includes("这是一段摘要"));
 		assert.ok(postInsertCall?.params.includes("SEO 主标题"));
 		assert.ok(postInsertCall?.params.includes("SEO 描述文本"));

@@ -17,6 +17,9 @@ interface Props {
 	articleSidebarName?: string;
 	articleSidebarBadge?: string;
 	articleSidebarBio?: string;
+	cjkCharCount?: number;
+	latinWordCount?: number;
+	estimatedReadingMinutes?: number;
 	backgroundOverride?: {
 		imageKey: string;
 		opacity: number;
@@ -41,6 +44,9 @@ const {
 	articleSidebarName,
 	articleSidebarBadge,
 	articleSidebarBio,
+	cjkCharCount,
+	latinWordCount,
+	estimatedReadingMinutes,
 	backgroundOverride,
 	toc,
 } = Astro.props;
@@ -50,6 +56,32 @@ const sidebarName = articleSidebarName?.trim() || authorName?.trim() || "博主"
 const sidebarBadge = articleSidebarBadge?.trim() || "文章作者";
 const sidebarBio = articleSidebarBio?.trim() || "在这里记录技术、生活和折腾。";
 const sidebarAvatarInitial = sidebarName.slice(0, 1).toUpperCase();
+const safeCjkCharCount =
+	Number.isFinite(cjkCharCount) && Number(cjkCharCount) > 0
+		? Math.trunc(Number(cjkCharCount))
+		: 0;
+const safeLatinWordCount =
+	Number.isFinite(latinWordCount) && Number(latinWordCount) > 0
+		? Math.trunc(Number(latinWordCount))
+		: 0;
+const safeEstimatedReadingMinutes =
+	Number.isFinite(estimatedReadingMinutes) &&
+	Number(estimatedReadingMinutes) > 0
+		? Math.trunc(Number(estimatedReadingMinutes))
+		: 1;
+const countLabelParts: string[] = [];
+
+if (safeCjkCharCount > 0) {
+	countLabelParts.push(`${safeCjkCharCount.toLocaleString("zh-CN")} 字`);
+}
+
+if (safeLatinWordCount > 0) {
+	countLabelParts.push(`${safeLatinWordCount.toLocaleString("en-US")} 词`);
+}
+
+const articleLengthLabel =
+	countLabelParts.length > 0 ? countLabelParts.join(" / ") : "0 字";
+const articleReadingTimeLabel = `约 ${safeEstimatedReadingMinutes.toLocaleString("zh-CN")} 分钟`;
 const tocEntries = (toc ?? [])
 	.map((item) => ({
 		...item,
@@ -153,6 +185,10 @@ const hasToc = tocEntries.length > 0;
 					>
 						取消透明度
 					</button>
+					<div class="article-hero-stats" aria-label="文章字数与阅读时间">
+						<span class="article-hero-stat">{articleLengthLabel}</span>
+						<span class="article-hero-stat">{articleReadingTimeLabel}</span>
+					</div>
 				</div>
 				<div class="article-kicker">精选文章</div>
 				<h1 class="article-title" transition:name={`title-${slug}`}>{title}</h1>
@@ -434,6 +470,31 @@ const hasToc = tocEntries.length > 0;
 		gap: 0.55rem;
 	}
 
+	.article-hero-stats {
+		margin-left: auto;
+		display: inline-flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 0.5rem;
+	}
+
+	.article-hero-stat {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: fit-content;
+		padding: 0.58rem 0.92rem;
+		border-radius: var(--radius-pill);
+		background: rgba(255, 255, 255, 0.08);
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		color: var(--color-text-secondary);
+		font-size: 0.84rem;
+		font-family: var(--font-strong);
+		backdrop-filter: blur(10px) saturate(120%);
+		-webkit-backdrop-filter: blur(10px) saturate(120%);
+	}
+
 	.article-back,
 	.article-transparency-toggle {
 		display: inline-flex;
@@ -482,7 +543,8 @@ const hasToc = tocEntries.length > 0;
 	}
 
 	:global(html.article-opaque-mode) .article-shell .article-back,
-	:global(html.article-opaque-mode) .article-shell .article-transparency-toggle {
+	:global(html.article-opaque-mode) .article-shell .article-transparency-toggle,
+	:global(html.article-opaque-mode) .article-shell .article-hero-stat {
 		background: rgba(var(--card-surface-rgb), 0.94);
 		backdrop-filter: none;
 		-webkit-backdrop-filter: none;
@@ -569,6 +631,14 @@ const hasToc = tocEntries.length > 0;
 
 		.article-sidebar {
 			display: none;
+		}
+	}
+
+	@media (max-width: 640px) {
+		.article-hero-stats {
+			margin-left: 0;
+			width: 100%;
+			justify-content: flex-start;
 		}
 	}
 </style>
