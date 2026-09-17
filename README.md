@@ -822,6 +822,18 @@ npm run hash:password -- 你的密码
 - `robots.txt`：由 `src/pages/robots.txt.ts` 输出，允许公开页面抓取，屏蔽后台登录与管理相关路径（`/api/auth`、`/api/admin`、`/admin`）。
 - `webmention`：由 `src/admin/routes/webmention.ts` 提供接收端点 `/api/webmention`，通过 `source/target` 校验后写入待审核队列；后台在 `/api/admin/mentions` 进行审核。
 
+### 获取文章 Markdown 原文
+
+在文章路径末尾加上 `.md` 即可获取数据库中保存的 Markdown 正文。例如，`/blog/hello-world` 对应 `/blog/hello-world.md`，中文文章路径同样支持。如果原地址以 `/` 结尾，先去掉末尾的 `/`，再添加 `.md`；查询参数放在 `.md` 后面。
+
+```bash
+curl 'https://你的域名/blog/hello-world.md'
+```
+
+响应为 UTF-8 纯文本（`Content-Type: text/plain; charset=utf-8`），可以直接交给 Markdown 解析器读取，不包含页面导航、样式或额外元数据。接口禁用缓存，文章修改或撤回后立即生效，读取原文不增加文章浏览量。
+
+只有已发布文章和已到发布时间的定时文章可读取；不存在的文章、草稿及尚未到发布时间的文章均返回纯文本 `404`，数据库暂时不可用时返回纯文本 `503`。
+
 ## 部署前检查
 
 上线前至少确认下面这些：
