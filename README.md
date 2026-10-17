@@ -818,7 +818,7 @@ npm run hash:password -- 你的密码
 ## SEO 与订阅
 
 - `sitemap.xml`：由 `src/pages/sitemap.xml.ts` 动态输出，包含公开页面和可见文章。
-- `rss.xml`：由 `src/pages/rss.xml.ts` 动态输出，默认收录最近 30 篇公开文章。
+- `rss.xml`：由 `src/pages/rss.xml.ts` 动态输出全部公开文章，`description` 提供经过安全渲染的完整 HTML 正文，不限制文章数量或截断内容；响应使用 `Cache-Control: no-store`，供阅读器获取最新内容。草稿和未到发布时间的定时文章不会输出。
 - `robots.txt`：由 `src/pages/robots.txt.ts` 输出，允许公开页面抓取，屏蔽后台登录与管理相关路径（`/api/auth`、`/api/admin`、`/admin`）。
 - `webmention`：由 `src/admin/routes/webmention.ts` 提供接收端点 `/api/webmention`，通过 `source/target` 校验后写入待审核队列；后台在 `/api/admin/mentions` 进行审核。
 

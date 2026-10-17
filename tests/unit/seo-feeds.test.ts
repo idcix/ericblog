@@ -32,7 +32,6 @@ describe("SEO 与订阅输出", () => {
 		assert.ok(source.includes('<rss version="2.0"'));
 		assert.ok(source.includes("application/rss+xml; charset=utf-8"));
 		assert.match(source, /encodeRouteParam\(post\.slug\)/u);
-		assert.ok(source.includes(".limit(30)"));
 	});
 
 	test("基础布局会将外观简介作为默认 description", async () => {
