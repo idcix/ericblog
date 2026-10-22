@@ -450,7 +450,7 @@ describe("后台接口", () => {
 		}
 	});
 
-	test("GET /friend-links/avatar 允许 SVG 头像资源", async () => {
+	test("GET /friend-links/avatar 允许 SVG 头像但隔离脚本和同源权限", async () => {
 		const originalFetch = globalThis.fetch;
 		const sourceUrl = "https://avatar.example.com/avatar.svg";
 		const svgBody = '<svg xmlns="http://www.w3.org/2000/svg"></svg>';
@@ -480,6 +480,10 @@ describe("后台接口", () => {
 
 			assert.equal(res.status, 200);
 			assert.equal(res.headers.get("content-type"), "image/svg+xml");
+			assert.equal(
+				res.headers.get("content-security-policy"),
+				"sandbox; default-src 'none'",
+			);
 			assert.equal(await res.text(), svgBody);
 		} finally {
 			globalThis.fetch = originalFetch;

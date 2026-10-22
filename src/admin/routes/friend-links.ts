@@ -406,6 +406,8 @@ friendLinksRoutes.get("/avatar", async (c) => {
 					"content-type": contentType,
 					"cache-control": `public, max-age=${AVATAR_PROXY_CACHE_SECONDS}, stale-while-revalidate=86400`,
 					"x-content-type-options": "nosniff",
+					// 第三方 SVG 直开时也是文档，必须禁用脚本并隔离博客的同源权限。
+					"content-security-policy": "sandbox; default-src 'none'",
 				},
 			});
 		}
