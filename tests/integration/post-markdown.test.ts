@@ -105,7 +105,7 @@ describe("文章 Markdown 原文接口", () => {
 			undefined,
 		]) {
 			const response = await requestMarkdown(slug);
-			assert.equal(response.status, 404, slug);
+			assert.equal(response.status, 404, `文章路径：${String(slug)}`);
 			assert.equal(await response.text(), "文章不存在");
 			assert.equal(response.headers.get("Location"), null);
 			assert.equal(response.headers.get("Cache-Control"), "no-store");
